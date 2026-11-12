@@ -1,7 +1,13 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "types": ["node"]
+    "types": ["node"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "paths": {
+      "@french-daily/learning-core": ["../learning-core/src/index.ts"],
+      "@french-daily/french-data": ["../french-data/src/index.ts"]
+    }
   },
-  "include": ["src", "build.mjs"]
+  "include": ["src"]
 }

@@ -7,6 +7,18 @@ Findings are tagged:
 - **[EXPERT-OPINION]** — practitioner or researcher reasoning/analysis without a new experiment.
 - **[EXPERIMENTAL]** — backed by a measured study, meta-analysis, or A/B test (vendor-reported A/B tests are labeled as such and should be treated with caution).
 
+## TL;DR for implementers
+
+1. **Feedback + explanation after every answer is the learning keystone** — practice testing with feedback is among the highest-yield techniques known (d ≈ 0.74–0.85 across large meta-analyses), and users revolt when "why was I wrong" is paywalled. Confidence: **high**.
+2. **FSRS is measurably better than SM-2** — at scale (~10k collections, ~350M reviews) it roughly halves recall-prediction error and reduces workload; hide its complexity behind sane defaults (90% desired retention). Confidence: **high**.
+3. **Streaks must be optional and forgiving** — vendor A/B data shows forgiveness mechanics *increase* activity (+0.38% DAU per extra streak freeze), habit research shows missing a day is cheap, and user threads show rigid streaks produce anxiety and hollow rituals. Confidence: **high** (leniency helps) / **medium** (net streak effect).
+4. **Finite, finishable sessions with a celebratory completion beat infinite feeds.** Confidence: **high**.
+5. **Red lines (avoid entirely):** randomized rewards/loot-box mechanics, streak-shame messaging, leaderboards, guilt notifications, paywalling the core loop, timed speed-review modes. Confidence: **high** that these are manipulative; documented churn drivers.
+6. **Swipe gestures:** widely adopted, cheap, satisfying — but **no experimental evidence** that swiping improves learning. Treat it as an honest self-grading gesture with tactile feedback, not reward bait. Confidence: **low** (claims beyond that).
+7. **Design cards around sentences and context**, not decontextualized word lists — the #1 boredom complaint across apps. Confidence: **high**.
+
+Full findings, source-by-source confidence tags, and 13 numbered implementation recommendations follow. Known evidence gaps are listed at the end — do not over-claim.
+
 ## Method and limitations
 
 - **This is not a comprehensive review of all social-media posts.** It is a search-engine-mediated sample: topics were discovered through DuckDuckGo HTML search (plus one failed/partial attempt at Bing), and then the most relevant threads and articles were opened and read directly (Reddit threads were read in a logged-in browser; Reddit blocks anonymous scraping).

@@ -62,7 +62,7 @@ export function SessionRunner({ config, onClose, onStartAnother }: Props) {
     return () => window.clearInterval(t);
   }, []);
 
-  const items = session?.items ?? [];
+  const items = useMemo(() => session?.items ?? [], [session]);
   const currentItem: SessionItem | undefined = useMemo(() => {
     if (gradedItemId) return items.find((i) => i.exercise.id === gradedItemId);
     return items.find((i) => !i.answered) ?? items[items.length - 1];

@@ -171,4 +171,19 @@ export const rawSentences: SentencePair[] = [
 
   s('always-late', 'He is always late.', 'Il est toujours en retard.',
     [], 'work', 'A2', 'Toujours = always; en retard = late.'),
+
+  s('buy-cheese', 'I am buying some cheese.', "J'achète du fromage.",
+    ['J’achète du fromage.'], 'shopping', 'A1', 'Du = de + le, partitive "some".'),
+
+  s('doctor-tomorrow', 'I have a doctor appointment tomorrow.', "J'ai rendez-vous chez le médecin demain.",
+    ['J’ai rendez-vous chez le médecin demain.', 'J\'ai un rendez-vous chez le médecin demain.'], 'health', 'A2', 'Avoir rendez-vous = to have an appointment.'),
+
+  s('wear-jacket', 'She is wearing a jacket.', 'Elle porte une veste.',
+    [], 'clothing', 'A1', 'Porter = to wear (also "to carry").'),
+
+  s('hands-cold', 'My hands are cold.', "J'ai froid aux mains.",
+    ['J’ai froid aux mains.'], 'body', 'A2', 'Avoir froid à + body part — not "mes mains sont froides".'),
+
+  s('bus-ten-minutes', 'The bus arrives in ten minutes.', 'Le bus arrive dans dix minutes.',
+    ['L\'autobus arrive dans dix minutes.', 'L’autobus arrive dans dix minutes.'], 'city', 'A1', 'Dans + duration = "in" (from now).'),
 ];

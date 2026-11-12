@@ -15,7 +15,7 @@
   "scripts": {
     "dev": "npm run dev --workspace @fd/web",
     "build": "npm run build:packages && npm run build:web",
-    "build:packages": "npm run build --workspace @fd/mcp-server",
+    "build:packages": "npm run build --workspace @french-daily/mcp-server",
     "build:web": "npm run build --workspace @fd/web",
     "preview": "npm run preview --workspace @fd/web",
     "test": "vitest run",

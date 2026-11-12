@@ -134,7 +134,7 @@ describe('answering + retries', () => {
   it('grades answers and schedules retries for failures (max 2)', () => {
     let s = newSession();
     const first = s.items[0];
-    let res = answerSessionItem(s, first.exercise.id, 'definitely wrong answer 12345');
+    const res = answerSessionItem(s, first.exercise.id, 'definitely wrong answer 12345');
     s = res.state;
     expect(res.grade!.isCorrect).toBe(false);
     expect(s.items.filter((i) => i.retry)).toHaveLength(1);

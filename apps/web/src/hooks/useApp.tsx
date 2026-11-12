@@ -54,12 +54,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Theme: explicit choice or system preference.
   useEffect(() => {
-    if (!settings) return;
+    const theme = settings?.theme;
+    if (!theme) return;
     const root = document.documentElement;
     const apply = () => {
       const dark =
-        settings.theme === 'dark' ||
-        (settings.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        theme === 'dark' ||
+        (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
       root.classList.toggle('dark', dark);
       const meta = document.querySelector('meta[name="theme-color"]');
       if (meta) meta.setAttribute('content', dark ? '#0c0c0f' : '#4f46e5');
