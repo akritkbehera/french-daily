@@ -118,3 +118,16 @@ No backend. No API keys. No analytics. All progress lives in your browser's Inde
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## Personal owner mode and reliability update
+
+The published interface now verifies the repository owner's GitHub account.
+See [owner access](docs/owner-access.md) for the minimal token setup and the
+limits of a public static site's interface lock. Learning history stays local.
+
+See [the learning engine](docs/learning-engine.md) for the four recall ratings,
+independent card schedules, due-only reviews, migration and backup recovery.
+The repair includes transactional saves, complete undo, stable challenges,
+plural-aware French content, an update notification and browser tests in CI.
+The original audit is retained in [docs/audit/REPORT.md](docs/audit/REPORT.md);
+its reproduction suite has been converted to passing regression assertions.

@@ -2,7 +2,7 @@
   "name": "french-daily",
   "version": "1.0.0",
   "private": true,
-  "description": "French Daily — a mobile-first PWA for daily French vocabulary, conjugation and sentence practice with spaced repetition.",
+  "description": "French Daily \u2014 a mobile-first PWA for daily French vocabulary, conjugation and sentence practice with spaced repetition.",
   "license": "MIT",
   "type": "module",
   "engines": {
@@ -24,7 +24,8 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p packages/learning-core/tsconfig.json && tsc --noEmit -p packages/french-data/tsconfig.json && tsc --noEmit -p packages/mcp-server/tsconfig.json && tsc --noEmit -p apps/web/tsconfig.json",
     "check": "npm run lint && npm run typecheck && npm run test && npm run build",
-    "icons": "node scripts/generate-icons.mjs"
+    "icons": "node scripts/generate-icons.mjs",
+    "test:mcp": "node scripts/test-mcp.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",

@@ -6,7 +6,7 @@ import { useRef, useState } from 'react';
 import type { AppSettings } from '@french-daily/learning-core';
 import { Button, Card, Screen, SectionTitle, Segmented, Toggle } from '../components/ui';
 import { useApp } from '../hooks/useApp';
-import { exportProgress, downloadBackup, importProgress, resetProgress } from '../storage/backup';
+import { exportProgress, exportRecoverySnapshot, downloadBackup, importProgress, resetProgress } from '../storage/backup';
 
 export function SettingsScreen() {
   const { settings, updateSettings, toast } = useApp();
@@ -58,7 +58,7 @@ export function SettingsScreen() {
 
   return (
     <Screen>
-      <SectionTitle>Settings</SectionTitle>
+      <SectionTitle level={1}>Settings</SectionTitle>
 
       {/* Appearance */}
       <Card className="p-4">
@@ -85,7 +85,7 @@ export function SettingsScreen() {
           options={[
             { value: 'short', label: 'Short (9)' },
             { value: 'standard', label: 'Standard (15)' },
-            { value: 'long', label: 'Long (24)' },
+            { value: 'long', label: 'Long (21)' },
           ]}
         />
         <div className="mt-4">
@@ -165,22 +165,7 @@ export function SettingsScreen() {
             checked={settings.streaksEnabled}
             onChange={(v) => set({ streaksEnabled: v })}
           />
-          <Toggle
-            label="Challenge reminders"
-            description="One optional notification where your browser supports it. Off by default."
-            checked={settings.notificationsEnabled}
-            onChange={async (v) => {
-              if (v && 'Notification' in window) {
-                const perm = await Notification.requestPermission();
-                if (perm !== 'granted') {
-                  toast('Notifications were not granted by the browser.', 'error');
-                  set({ notificationsEnabled: false });
-                  return;
-                }
-              }
-              set({ notificationsEnabled: v });
-            }}
-          />
+          <p className="py-3 text-sm text-muted">Scheduled reminders are not available in this offline edition.</p>
         </div>
       </Card>
 
@@ -188,13 +173,17 @@ export function SettingsScreen() {
       <Card className="mt-3 p-4">
         <div className="text-[13px] font-semibold text-muted uppercase tracking-[0.08em] mb-2">Your data</div>
         <p className="text-[13px] text-muted">
-          Everything stays in your browser (IndexedDB). No accounts, no servers, no analytics. Export a backup to move
+          Everything stays in your browser (IndexedDB). GitHub verifies access; learning history never leaves this device. No analytics. Export a backup to move
           your progress between devices.
         </p>
         <div className="mt-3 flex flex-col gap-2">
           <Button variant="secondary" onClick={onExport}>
             Export progress (JSON)
           </Button>
+          <Button variant="secondary" onClick={async () => {
+            const snapshot = await exportRecoverySnapshot();
+            if (snapshot) downloadBackup(snapshot); else toast('No upgrade or restore snapshot exists yet.');
+          }}>Export safety snapshot</Button>
           <Button variant="secondary" disabled={importing} onClick={() => fileRef.current?.click()}>
             {importing ? 'Importing…' : 'Import progress'}
           </Button>

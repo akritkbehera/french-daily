@@ -19,6 +19,7 @@ import {
   todayLocal,
 } from '@french-daily/learning-core';
 import { sources } from '@french-daily/french-data';
+import { Modal } from './Modal';
 import { ExerciseCard, feedbackEffects } from './ExerciseCard';
 import { Badge, Button, Card, ProgressBar, Stat } from './ui';
 import { checkMilestones, getReviewStates, listAttempts, recordAttempt, recordSessionCompletion } from '../storage/repos';
@@ -41,14 +42,18 @@ export function SessionRunner({ config, onClose, onStartAnother }: Props) {
   const [streak, setStreak] = useState(0);
   const [elapsed, setElapsed] = useState(0);
   const presentedAt = useRef<number>(Date.now());
+  const saving = useRef(false);
+  const continuing = useRef(false);
   const sessionStart = useRef<number>(Date.now());
   const [abandonConfirm, setAbandonConfirm] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    setSession(null); setSummary(null); setGrade(null); setGradedItemId(null); setElapsed(0); setAbandonConfirm(false);
     getReviewStates().then((states) => {
       if (cancelled) return;
-      setSession(buildSession(config, sources, states));
+      setSession({ ...buildSession(config, sources, states), id: `session-${crypto.randomUUID()}` });
+      presentedAt.current = Date.now();
       sessionStart.current = Date.now();
     });
     return () => {
@@ -71,35 +76,27 @@ export function SessionRunner({ config, onClose, onStartAnother }: Props) {
 
   const handleAnswer = useCallback(
     async (response: string, selectionIndex?: number) => {
-      if (!session || !currentItem || grade) return;
+      if (!session || !currentItem || grade || saving.current) return;
       const durationMs = Date.now() - presentedAt.current;
       const result = answerSessionItem(session, currentItem.exercise.id, response, selectionIndex);
       if (!result.grade) return;
 
-      setSession(result.state);
-      setGrade(result.grade);
-      setGradedItemId(currentItem.exercise.id);
-      feedbackEffects(result.grade, {
-        sound: settings?.soundEnabled ?? false,
-        haptics: settings?.hapticsEnabled ?? false,
-      });
+      saving.current = true;
+      try {
+        await recordAttempt({ exercise: currentItem.exercise, response, grade: result.grade, sessionId: result.state.id, durationMs });
+        setSession(result.state); setGrade(result.grade); setGradedItemId(currentItem.exercise.id);
+        feedbackEffects(result.grade, { sound: settings?.soundEnabled ?? false, haptics: settings?.hapticsEnabled ?? false });
+      } catch { toast('Could not save your answer. Please try again.', 'error'); }
+      finally { saving.current = false; }
 
-      await recordAttempt({
-        exercise: currentItem.exercise,
-        response,
-        grade: result.grade,
-        sessionId: result.state.id,
-        durationMs,
-      });
     },
-    [session, currentItem, grade, settings],
+    [session, currentItem, grade, settings, toast],
   );
 
   const handleContinue = useCallback(async () => {
-    if (!session) return;
-    setGrade(null);
-    setGradedItemId(null);
-    presentedAt.current = Date.now();
+    if (!session || saving.current || continuing.current) return;
+    continuing.current = true;
+    try {
 
     if (isSessionComplete(session)) {
       const s = summarizeSession(session, 0, todayLocal());
@@ -108,6 +105,7 @@ export function SessionRunner({ config, onClose, onStartAnother }: Props) {
           s,
           session.config.mode,
           Date.now() - sessionStart.current,
+          session.id,
         );
         setStreak(newStreak);
         s.streakDays = newStreak;
@@ -119,17 +117,17 @@ export function SessionRunner({ config, onClose, onStartAnother }: Props) {
         const attempts = await listAttempts();
         const reviews = await getReviewStates();
         const stats = computeItemStats(attempts);
-        let masteredVocab = 0;
-        let masteredVerbs = 0;
+        const masteredVocabIds = new Set<string>();
+        const masteredVerbIds = new Set<string>();
         for (const [id, st] of stats) {
           if (isMastered(st, reviews.get(id))) {
-            if (id.startsWith('noun:')) masteredVocab += 1;
-            if (id.startsWith('verb:')) masteredVerbs += 1;
+            if (id.startsWith('noun:')) masteredVocabIds.add(id.split('::')[0]);
+            if (id.startsWith('verb:')) masteredVerbIds.add(id.split('::')[0]);
           }
         }
         const newMilestones = await checkMilestones({
-          masteredVocab,
-          masteredVerbs,
+          masteredVocab: masteredVocabIds.size,
+          masteredVerbs: masteredVerbIds.size,
           reviewsTotal: attempts.length,
           streakDays: s.streakDays,
           bestDailyAccuracy: s.accuracy,
@@ -142,6 +140,9 @@ export function SessionRunner({ config, onClose, onStartAnother }: Props) {
         // Milestone checks never block session completion.
       }
     }
+    setGrade(null); setGradedItemId(null); presentedAt.current = Date.now();
+    } catch { toast('Could not save session completion. Please try Continue again.', 'error'); }
+    finally { continuing.current = false; }
   }, [session, settings, toast]);
 
   const retryCount = items.filter((i) => i.retry).length;
@@ -155,14 +156,15 @@ export function SessionRunner({ config, onClose, onStartAnother }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-bg overflow-y-auto">
+    <Modal label="Practice session" onEscape={() => { if (!saving.current) { if (answeredCount > 0) setAbandonConfirm(true); else onClose(); } }} className="fixed inset-0 z-50 bg-bg overflow-y-auto">
       <div className="mx-auto w-full max-w-2xl px-5 py-5">
+        {items.length === 0 && <p className="mt-12 text-center text-muted">No cards are due or match these filters. Close this session to choose another practice.</p>}
         {!summary && (
           <>
             {/* Session header */}
             <div className="flex items-center justify-between gap-3">
               <button
-                onClick={() => (answeredCount > 0 ? setAbandonConfirm(true) : onClose())}
+                onClick={() => { if (!saving.current) { if (answeredCount > 0) setAbandonConfirm(true); else onClose(); } }}
                 className="rounded-full border border-edge bg-surface px-3.5 py-1.5 text-[13px] font-semibold text-muted"
                 aria-label="End session"
                 data-testid="end-session-button"
@@ -267,7 +269,7 @@ export function SessionRunner({ config, onClose, onStartAnother }: Props) {
 
         {/* Abandon confirmation: partial sessions never count as completed */}
         {abandonConfirm && (
-          <div className="fixed inset-0 z-[60] bg-black/45 flex items-end sm:items-center justify-center p-4">
+          <Modal label="End this session?" onEscape={() => setAbandonConfirm(false)} className="fixed inset-0 z-[60] bg-black/45 flex items-end sm:items-center justify-center p-4">
             <Card className="w-full max-w-sm p-5">
               <h3 className="text-[17px] font-bold text-ink">End this session?</h3>
               <p className="mt-1.5 text-[14px] text-muted">
@@ -282,9 +284,9 @@ export function SessionRunner({ config, onClose, onStartAnother }: Props) {
                 </Button>
               </div>
             </Card>
-          </div>
+          </Modal>
         )}
       </div>
-    </div>
+    </Modal>
   );
 }

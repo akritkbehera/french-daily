@@ -6,6 +6,10 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => sessionStorage.setItem('french-daily-owner-session', JSON.stringify({ login: 'akritkbehera', verifiedAt: Date.now() })));
+});
+
 const isMobileViewport = (page: Page) => page.viewportSize()!.width < 768;
 
 async function gotoApp(page: Page) {

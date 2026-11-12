@@ -45,13 +45,13 @@ function uid(itemId: string, kind: ExerciseKind, variant = ''): string {
 
 /** English → French typed translation ("The house" → "la maison"). */
 export function makeEnToFrTranslation(item: VocabItem, rng: Rng): TypedExercise {
-  const useDefinite = rng() < 0.6;
+  const useDefinite = item.countable === false || rng() < 0.6;
   const english = item.english[0];
-  const promptEn = useDefinite ? `The ${english}` : indefiniteEnglish(english);
-  const expected = useDefinite
+  const promptEn = useDefinite ? `The ${english}` : item.number === 'plural' ? `Some ${english}` : indefiniteEnglish(english);
+  const expected = item.number === 'plural' ? `${useDefinite ? 'les' : 'des'} ${item.french}` : useDefinite
     ? withDefiniteArticle(item.french, { gender: item.gender, elision: item.elision })
     : withIndefiniteArticle(item.french, { gender: item.gender, elision: item.elision });
-  const altExpected = useDefinite
+  const altExpected = item.number === 'plural' ? `${useDefinite ? 'des' : 'les'} ${item.french}` : useDefinite
     ? withIndefiniteArticle(item.french, { gender: item.gender, elision: item.elision })
     : withDefiniteArticle(item.french, { gender: item.gender, elision: item.elision });
   return {
@@ -66,8 +66,8 @@ export function makeEnToFrTranslation(item: VocabItem, rng: Rng): TypedExercise 
     expected,
     // The alternative article is *not* accepted: the article carries the gender.
     accepted: [],
-    explanation: `${item.french} is ${item.gender === 'm' ? 'masculine' : 'feminine'} (${withDefiniteArticle(item.french, { gender: item.gender, elision: item.elision })} / ${altExpected}). Example: ${item.exampleFr} — ${item.exampleEn}`,
-    hint: `${item.topic} · ${item.gender === 'm' ? 'masculine' : 'feminine'}`,
+    explanation: `${item.french} is ${item.gender === 'm' ? 'masculine' : 'feminine'} (${(item.number === 'plural' ? `les ${item.french}` : withDefiniteArticle(item.french, { gender: item.gender, elision: item.elision }))} / ${altExpected}). Example: ${item.exampleFr} — ${item.exampleEn}`,
+    hint: item.topic,
     direction: 'en-fr',
   };
 }
@@ -78,7 +78,7 @@ function indefiniteEnglish(english: string): string {
 
 /** French → English typed translation ("le jardin" → "the garden"). */
 export function makeFrToEnTranslation(item: VocabItem): TypedExercise {
-  const prompt = withDefiniteArticle(item.french, { gender: item.gender, elision: item.elision });
+  const prompt = item.number === 'plural' ? `les ${item.french}` : withDefiniteArticle(item.french, { gender: item.gender, elision: item.elision });
   const expected = `the ${item.english[0]}`;
   const accepted = item.english.flatMap((e) => [`the ${e}`, e]);
   return {
@@ -102,6 +102,7 @@ export function makeGenderExercise(
   item: VocabItem,
   articleType: 'definite' | 'indefinite' | 'definite-plural' | 'indefinite-plural' = 'definite',
 ): GenderSelectExercise {
+  if (item.number === 'plural' && !articleType.endsWith('plural')) articleType = articleType === 'definite' ? 'definite-plural' : 'indefinite-plural';
   const articles = buildArticles(item.french, { gender: item.gender, elision: item.elision });
   const expected = articleOptionsFor(articles, articleType);
   const noun = articleType.endsWith('plural') ? item.plural : item.singular;
@@ -120,8 +121,8 @@ export function makeGenderExercise(
     prompt: `___ ${noun}`,
     expected,
     accepted: expected === "l'" ? ["l", "l’"] : [],
-    explanation: `${item.french} is ${item.gender === 'm' ? 'masculine' : 'feminine'} (${item.gender === 'm' ? 'un' : 'une'} ${item.french}); the definite article is ${articles.definiteSingular} → ${withDefiniteArticle(item.french, { gender: item.gender, elision: item.elision })}. Example: ${item.exampleFr}`,
-    hint: item.gender === 'm' ? 'masculine' : 'feminine',
+    explanation: `${item.french} is ${item.gender === 'm' ? 'masculine' : 'feminine'} (${item.number === 'plural' ? 'des' : item.gender === 'm' ? 'un' : 'une'} ${item.french}); the definite article is ${articles.definiteSingular} → ${(item.number === 'plural' ? `les ${item.french}` : withDefiniteArticle(item.french, { gender: item.gender, elision: item.elision }))}. Example: ${item.exampleFr}`,
+    hint: undefined,
     articleType,
     options,
   };
@@ -138,12 +139,12 @@ export function makeVocabMultipleChoice(
   const others = pool.filter((v) => v.id !== item.id && v.topic !== item.topic);
   const distractorPool = sameTopic.length >= 3 ? sameTopic : [...sameTopic, ...others];
   const distractors = sample(distractorPool, 3, rng).map((d) =>
-    direction === 'fr-en' ? `the ${d.english[0]}` : withDefiniteArticle(d.french, { gender: d.gender, elision: d.elision }),
+    direction === 'fr-en' ? `the ${d.english[0]}` : (d.number === 'plural' ? `les ${d.french}` : withDefiniteArticle(d.french, { gender: d.gender, elision: d.elision })),
   );
   const expected =
     direction === 'fr-en'
       ? `the ${item.english[0]}`
-      : withDefiniteArticle(item.french, { gender: item.gender, elision: item.elision });
+      : (item.number === 'plural' ? `les ${item.french}` : withDefiniteArticle(item.french, { gender: item.gender, elision: item.elision }));
   const options = shuffle([expected, ...distractors], rng);
   return {
     id: uid(item.id, 'multiple-choice', direction),
@@ -155,11 +156,11 @@ export function makeVocabMultipleChoice(
     instruction: direction === 'fr-en' ? 'Choose the English translation' : 'Choose the French translation',
     prompt:
       direction === 'fr-en'
-        ? withDefiniteArticle(item.french, { gender: item.gender, elision: item.elision })
+        ? (item.number === 'plural' ? `les ${item.french}` : withDefiniteArticle(item.french, { gender: item.gender, elision: item.elision }))
         : `the ${item.english[0]}`,
     expected,
     accepted: [],
-    explanation: `${withDefiniteArticle(item.french, { gender: item.gender, elision: item.elision })} = the ${item.english[0]}. Example: ${item.exampleFr}`,
+    explanation: `${(item.number === 'plural' ? `les ${item.french}` : withDefiniteArticle(item.french, { gender: item.gender, elision: item.elision }))} = the ${item.english[0]}. Example: ${item.exampleFr}`,
     options,
     correctIndex: options.indexOf(expected),
   };
@@ -173,8 +174,10 @@ export function makeVocabMultipleChoice(
 export function makeConjugationFill(verb: Verb, pronoun: PronounKey, complement: string): Exercise {
   const form = verb.forms[pronoun];
   const subjectLabel = PRONOUN_LABELS[pronoun].split('/')[0];
-  const reflexivePart = verb.reflexive ? ` ${reflexivePronoun(pronoun)}` : '';
-  const prompt = `${subjectLabel}${reflexivePart} ___ (${verb.infinitive}) ${complement}`.replace(/\s+/g, ' ').trim();
+  const ref = reflexivePronoun(pronoun);
+  const reflexivePart = verb.reflexive ? ` ${VOWEL_SOUND.test(form) && ['me','te','se'].includes(ref) ? ref.slice(0,-1) + '’' : ref}` : '';
+  const subject = pronoun === 'je' && !verb.reflexive && VOWEL_SOUND.test(form) ? "j’" : subjectLabel;
+  const prompt = `${subject}${reflexivePart}${subject.endsWith('’') || reflexivePart.endsWith('’') ? '' : ' '}___ (${verb.infinitive}) ${complement}`.replace(/\s+/g, ' ').trim();
   return {
     id: uid(verb.id, 'conjugation-fill', pronoun),
     kind: 'conjugation-fill',
@@ -321,7 +324,7 @@ export function generateVocabExercise(
   }
   if (passesFilter(item.topic, item.level, 'gender-select', filter)) {
     candidates.push(() => makeGenderExercise(item, 'definite'));
-    candidates.push(() => makeGenderExercise(item, 'indefinite'));
+    if (item.countable !== false) candidates.push(() => makeGenderExercise(item, 'indefinite'));
   }
   if (passesFilter(item.topic, item.level, 'multiple-choice', filter)) {
     candidates.push(() => makeVocabMultipleChoice(item, pool, rng, 'fr-en'));

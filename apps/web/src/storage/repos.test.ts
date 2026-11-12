@@ -50,12 +50,12 @@ describe('recordAttempt', () => {
     expect(attemptId).toBeGreaterThan(0);
     const attempts = await listAttempts();
     expect(attempts).toHaveLength(1);
-    expect(attempts[0].itemId).toBe(ex.itemId);
+    expect(attempts[0].itemId).toBe(ex.id);
     expect(attempts[0].correct).toBe(true);
     expect(attempts[0].durationMs).toBe(5000);
     expect(attempts[0].rating).toBe(3);
 
-    const stored = await db.reviews.get(ex.itemId);
+    const stored = await db.reviews.get(ex.id);
     expect(stored).toBeDefined();
     expect(stored!.reviewCount).toBe(1);
     expect(stored!.correctCount).toBe(1);
@@ -162,6 +162,6 @@ describe('review states map', () => {
     const grade = gradeAnswerList(ex.expected, ex.expected, ex.accepted, ex.explanation);
     await recordAttempt({ exercise: ex, response: ex.expected, grade, sessionId: 's1', durationMs: 1 });
     const map = await getReviewStates();
-    expect(map.get(ex.itemId)).toBeDefined();
+    expect(map.get(ex.id)).toBeDefined();
   });
 });

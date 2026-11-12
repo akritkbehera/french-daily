@@ -18,7 +18,7 @@
  *
  *   Forget (G = 1):  S′ = max(0.01, w₁₁ · D^(-w₁₂) · ((S+1)^w₁₃ - 1) · e^(w₁₄·(1-R)))
  *
- *   Difficulty:      D′ = clamp(w₇ · D₀(4) + (1-w₇) · (D - w₆·(G-3)), 1, 10)
+ *   Difficulty:      D′ = clamp(w₇ · D₀(3) + (1-w₇) · (D - w₆·(G-3)), 1, 10)
  *
  *   Interval:        I(R) = clamp(round(S / FACTOR · (R^(1/DECAY) - 1)), 1, MAX_INTERVAL)
  *
@@ -150,9 +150,9 @@ export function fsrsReview(
   }
   stability = clamp(stability, 0.1, MAX_INTERVAL);
 
-  // Difficulty update with mean reversion toward D₀(Easy).
-  const d0Easy = clamp(w[4] - (4 - 3) * w[5], 1, 10);
-  const dPrime = clamp(w[7] * d0Easy + (1 - w[7]) * (d - w[6] * (rating - 3)), 1, 10);
+  // Difficulty update with mean reversion toward D₀(Good).
+  const d0Good = clamp(w[4], 1, 10);
+  const dPrime = clamp(w[7] * d0Good + (1 - w[7]) * (d - w[6] * (rating - 3)), 1, 10);
 
   const next: FsrsState = {
     stability,

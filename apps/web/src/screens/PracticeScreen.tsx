@@ -42,7 +42,7 @@ export function PracticeScreen() {
 
   return (
     <Screen>
-      <SectionTitle>Practice</SectionTitle>
+      <SectionTitle level={1}>Practice</SectionTitle>
       <p className="text-[14px] text-muted -mt-1 mb-4">
         Sessions are short and finite — you&apos;ll always reach a satisfying finish line.
       </p>
@@ -62,7 +62,7 @@ export function PracticeScreen() {
         <Card className="mt-4 p-5">
           <h3 className="text-[17px] font-bold text-ink">Daily practice</h3>
           <p className="mt-1 text-[13.5px] text-muted">
-            5 nouns + 5 verbs + 5 sentences, prioritized by your FSRS review schedule. Failed items come back as in-session retries (max 2) so nothing slips through.
+            {size === 'short' ? 3 : size === 'long' ? 7 : 5} nouns, verbs and sentences each, prioritized by your FSRS review schedule. Failed items come back as in-session retries (max 2) so nothing slips through.
           </p>
           <div className="mt-3">
             <Segmented
@@ -72,7 +72,7 @@ export function PracticeScreen() {
               options={[
                 { value: 'short', label: 'Short (9)' },
                 { value: 'standard', label: 'Standard (15)' },
-                { value: 'long', label: 'Long (24)' },
+                { value: 'long', label: 'Long (21)' },
               ]}
             />
           </div>

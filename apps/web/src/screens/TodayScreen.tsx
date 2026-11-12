@@ -3,9 +3,11 @@
  * goal progress, and the primary call to action. Finite and calm by design:
  * everything here points at a short, finishable session.
  */
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../storage/db';
 import { useEffect, useMemo, useState } from 'react';
 import type { ChallengeProgress, ReviewState, SessionCompletionRecord } from '@french-daily/learning-core';
-import { computeLearningMetrics, todayLocal, shortDateLabel } from '@french-daily/learning-core';
+import { computeLearningMetrics, computeItemStats, isMastered, todayLocal, shortDateLabel } from '@french-daily/learning-core';
 import { useApp } from '../hooks/useApp';
 import { Badge, Button, Card, ProgressBar, SectionTitle, Screen, Stat } from '../components/ui';
 import { ProgressRing } from '../components/Charts';
@@ -20,6 +22,7 @@ export function TodayScreen() {
   const [goalMinutes, setGoalMinutes] = useState(0);
   const [newMilestones, setNewMilestones] = useState<string[]>([]);
 
+  const revision = useLiveQuery(async () => JSON.stringify([await db.attempts.count(), await db.sessions.count(), await db.challenges.toArray()]));
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -39,9 +42,11 @@ export function TodayScreen() {
 
       // Milestone check on load (cheap; learning outcomes only).
       const learning = computeLearningMetrics(attempts, r, today);
+      const stats = computeItemStats(attempts);
+      const mastered = [...stats.values()].filter(st => isMastered(st, r.get(st.itemId)));
       const ms2 = await checkMilestones({
-        masteredVocab: learning.masteredItems,
-        masteredVerbs: learning.masteredItems,
+        masteredVocab: new Set(mastered.filter(st => st.itemId.startsWith('noun:')).map(st => st.itemId.split('::')[0])).size,
+        masteredVerbs: new Set(mastered.filter(st => st.itemId.startsWith('verb:')).map(st => st.itemId.split('::')[0])).size,
         reviewsTotal: attempts.length,
         streakDays: settings?.streak ?? 0,
         bestDailyAccuracy: learning.accuracy,
@@ -49,14 +54,14 @@ export function TodayScreen() {
       });
       if (alive && ms2.length > 0) {
         setNewMilestones(ms2.map((m) => m.label));
-        for (const m of ms2) toast(`🎉 ${m.label}`, 'success');
+        for (const m of ms2) if (settings?.celebrationsEnabled) toast(`🎉 ${m.label}`, 'success');
       }
     })();
     return () => {
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [revision, settings?.streak, settings?.celebrationsEnabled]);
 
   const dueCount = useMemo(() => {
     const today = todayLocal();
@@ -98,7 +103,7 @@ export function TodayScreen() {
                 : `${Math.max(1, (settings?.dailyGoalMinutes ?? 10) - goalMinutes)} min to your daily goal`}
             </div>
             <div className="text-[13px] text-muted mt-0.5">
-              {dueCount > 0 ? `${dueCount} review${dueCount === 1 ? '' : 's'} due today` : 'Reviews are all caught up'} · 5 nouns + 5 verbs + 5 sentences
+              {dueCount > 0 ? `${dueCount} review${dueCount === 1 ? '' : 's'} due today` : 'Reviews are all caught up'} · {settings?.sessionSize === 'short' ? 3 : settings?.sessionSize === 'long' ? 7 : 5} per section
             </div>
           </div>
         </div>

@@ -66,7 +66,7 @@ export const vocabularyPartB: RawVocabEntry[] = [
   n('écharpe', ['scarf'], 'f', 'clothing', 'A2', "L'écharpe est rouge.", 'The scarf is red.'),
   n('ceinture', ['belt'], 'f', 'clothing', 'A2', 'La ceinture est en cuir.', 'The belt is made of leather.'),
   n('sac', ['bag'], 'm', 'clothing', 'A1', 'Le sac est lourd.', 'The bag is heavy.'),
-  n('lunettes', ['glasses'], 'f', 'clothing', 'A2', 'Mes lunettes sont sur le bureau.', 'My glasses are on the desk.', { plural: 'lunettes' }),
+  n('lunettes', ['glasses'], 'f', 'clothing', 'A2', 'Mes lunettes sont sur le bureau.', 'My glasses are on the desk.', { plural: 'lunettes', number: 'plural' }),
   n('cravate', ['tie'], 'f', 'clothing', 'B1', 'La cravate est élégante.', 'The tie is elegant.'),
 
   // ---- time ----

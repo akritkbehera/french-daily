@@ -15,16 +15,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Exercise, GradeResult, ReviewState } from '@french-daily/learning-core';
 import {
-  generateSentenceExercise,
-  generateVerbExercise,
-  generateVocabExercise,
+  buildSession, customSessionConfig, reviewPriority, todayLocal,
   gradeAnswerList,
-  rngFromSeed,
 } from '@french-daily/learning-core';
 import { sources } from '@french-daily/french-data';
 import { Badge, Button, Card, Chip } from './ui';
 import { buzz, playTone, prefersReducedMotion, speakFrench } from '../services/feedback';
-import { getReviewStates, recordAttempt } from '../storage/repos';
+import { getReviewStates, recordAttempt, recordSessionCompletion, undoAttempt } from '../storage/repos';
 import { db } from '../storage/db';
 import { useApp } from '../hooks/useApp';
 
@@ -43,6 +40,9 @@ interface DeckCard {
 interface HistoryEntry {
   attemptId: number | null;
   prevReview: ReviewState | null;
+  cardId: string;
+  grade: GradeResult;
+  section: 'nouns' | 'verbs' | 'sentences';
 }
 
 export function SwipeDeck() {
@@ -57,49 +57,26 @@ export function SwipeDeck() {
   const [length, setLength] = useState(12);
   const historyRef = useRef<HistoryEntry[]>([]);
   const dragState = useRef({ x0: 0, y0: 0, t0: 0, thresholdBuzzed: false });
+  const busy = useRef(false);
+  const timer = useRef<number | undefined>(undefined);
+  const buildVersion = useRef(0);
+  const sessionId = useRef('');
+  const startedAt = useRef(Date.now());
+  const presentedAt = useRef(Date.now());
   const reduced = useMemo(() => prefersReducedMotion(), []);
 
   const build = useCallback(async (count: number) => {
+    const version = ++buildVersion.current;
     const states = await getReviewStates();
-    const rng = rngFromSeed(`swipe-${Date.now()}`);
-    const cards: DeckCard[] = [];
-
-    // Due items first (FSRS priority), then fresh material.
-    const orderIds = (ids: string[]) =>
-      ids
-        .map((id) => ({ id, due: states.get(id)?.nextDue ?? '0' }))
-        .sort((a, b) => (a.due < b.due ? -1 : 1))
-        .map((x) => x.id);
-
-    const vocabIds = orderIds(sources.vocabulary.map((v) => v.id));
-    const verbIds = orderIds(sources.verbs.map((v) => v.id));
-    const sentIds = orderIds(sources.sentences.map((s) => s.id));
-    const perKind = Math.ceil(count / 3);
-    const byId = {
-      vocab: new Map(sources.vocabulary.map((v) => [v.id, v])),
-      verb: new Map(sources.verbs.map((v) => [v.id, v])),
-      sent: new Map(sources.sentences.map((s) => [s.id, s])),
-    };
-
-    for (const id of vocabIds.slice(0, perKind)) {
-      const ex = generateVocabExercise(byId.vocab.get(id)!, sources.vocabulary, rng, { topics: 'all', levels: 'all', kinds: 'all' });
-      if (ex) cards.push({ exercise: ex, revealed: false });
-    }
-    for (const id of verbIds.slice(0, perKind)) {
-      const v = byId.verb.get(id)!;
-      const ex = generateVerbExercise(v, v.fillComplement, rng, { topics: 'all', levels: 'all', kinds: 'all' });
-      if (ex) cards.push({ exercise: ex, revealed: false });
-    }
-    for (const id of sentIds.slice(0, perKind)) {
-      const ex = generateSentenceExercise(byId.sent.get(id)!, rng, { topics: 'all', levels: 'all', kinds: 'all' });
-      if (ex) cards.push({ exercise: ex, revealed: false });
-    }
-
-    // Deterministic shuffle of the interleaved deck.
-    for (let i = cards.length - 1; i > 0; i--) {
-      const j = Math.floor(rng() * (i + 1));
-      [cards[i], cards[j]] = [cards[j], cards[i]];
-    }
+    const today = todayLocal();
+    const due = buildSession(customSessionConfig({ mode: 'review', nouns: count, verbs: 0, sentences: 0 }), sources, states, today).items;
+    const candidates = buildSession(customSessionConfig({ nouns: count, verbs: count, sentences: count }), sources, states, today, `swipe-${Date.now()}`).items;
+    const used = new Set(due.map(x => x.exercise.itemId));
+    const fresh = candidates.filter(x => !states.has(x.exercise.id) && !used.has(x.exercise.itemId));
+    const cards: DeckCard[] = [...due, ...fresh].sort((a,b) => reviewPriority(states.get(a.exercise.id), today) - reviewPriority(states.get(b.exercise.id), today)).map(x => ({ exercise: x.exercise, revealed: false }));
+    if (version !== buildVersion.current) return;
+    sessionId.current = `swipe-${crypto.randomUUID()}`;
+    startedAt.current = presentedAt.current = Date.now();
     setDeck(cards.slice(0, count));
     setPos(0);
     setFinished(false);
@@ -108,6 +85,7 @@ export function SwipeDeck() {
 
   useEffect(() => {
     build(length);
+    return () => { window.clearTimeout(timer.current); };
   }, [build, length]);
 
   const current = deck[pos];
@@ -121,67 +99,59 @@ export function SwipeDeck() {
 
   const commitGrade = useCallback(
     async (grade: Grade) => {
-      if (!current || !current.revealed || flying) return;
-      const map: Record<Grade, GradeResult> = {
-        again: gradeAnswerList('(not remembered)', current.exercise.expected, current.exercise.accepted, current.exercise.explanation),
-        hard: gradeAnswerList(current.exercise.expected, current.exercise.expected, current.exercise.accepted, current.exercise.explanation),
-        good: gradeAnswerList(current.exercise.expected, current.exercise.expected, current.exercise.accepted, current.exercise.explanation),
-        easy: gradeAnswerList(current.exercise.expected, current.exercise.expected, current.exercise.accepted, current.exercise.explanation),
-      };
-      const gradeResult = map[grade];
-      // Map to FSRS ratings: again→1, hard→2, good/easy→3 (good) for schedule.
-      const graded: GradeResult = grade === 'again' ? gradeResult : grade === 'hard' ? { ...gradeResult, outcome: 'typo', isTypo: true, isCorrect: false, feedback: 'Marked hard — will return sooner.' } : gradeResult;
-
-      const prevReview = (await db.reviews.get(current.exercise.itemId)) ?? null;
-      const { attemptId } = await recordAttempt({
-        exercise: current.exercise,
-        response: grade === 'again' ? '(swiped: again)' : '(swiped: remembered)',
-        grade: graded,
-        sessionId: `swipe-${Date.now()}`,
-        durationMs: null,
-      });
-      historyRef.current.push({ attemptId, prevReview });
-
-      playTone(grade === 'again' ? 'wrong' : 'correct', settings?.soundEnabled ?? false);
-      buzz(grade === 'again' ? [16, 30, 16] : 10, settings?.hapticsEnabled ?? false);
-
-      setFlying(grade === 'again' ? 'left' : 'right');
-      window.setTimeout(
-        () => {
-          setFlying(null);
-          setDx(0);
-          setDy(0);
-          setPos((p) => {
-            const nextPos = p + 1;
-            if (nextPos >= deck.length) setFinished(true);
-            return nextPos;
-          });
-        },
-        reduced ? 0 : 230,
-      );
+      if (!current || !current.revealed || flying || busy.current) return;
+      busy.current = true;
+      try {
+        const gradeResult = gradeAnswerList(grade === 'again' ? '(not remembered)' : current.exercise.expected, current.exercise.expected, current.exercise.accepted, current.exercise.explanation);
+        const prevReview = (await db.reviews.get(current.exercise.id)) ?? null;
+        const { attemptId } = await recordAttempt({
+          exercise: current.exercise, response: `(self-assessed: ${grade})`, grade: gradeResult,
+          rating: ({ again: 1, hard: 2, good: 3, easy: 4 } as const)[grade],
+          sessionId: sessionId.current, durationMs: Date.now() - presentedAt.current,
+        });
+        historyRef.current.push({ attemptId, prevReview, cardId: current.exercise.id, grade: gradeResult,
+          section: current.exercise.reviewKind === 'vocab' ? 'nouns' : current.exercise.reviewKind === 'verb' ? 'verbs' : 'sentences' });
+        if (pos + 1 >= deck.length) {
+          const entries = historyRef.current;
+          const correct = entries.filter(x => x.grade.isCorrect).length;
+          const bySection = { nouns: { total: 0, correct: 0 }, verbs: { total: 0, correct: 0 }, sentences: { total: 0, correct: 0 } };
+          for (const h of entries) { bySection[h.section].total++; if (h.grade.isCorrect) bySection[h.section].correct++; }
+          await recordSessionCompletion({ total: entries.length, correct, incorrect: entries.length - correct, accuracy: Math.round(correct / entries.length * 100), typos: 0, bySection, scheduledForReview: [], weakAreas: [], streakDays: 0, completedOn: todayLocal() }, 'custom', Date.now() - startedAt.current, sessionId.current).catch(() => toast('Reviews saved. Session summary could not be saved.', 'error'));
+        }
+        playTone(grade === 'again' ? 'wrong' : 'correct', settings?.soundEnabled ?? false);
+        buzz(grade === 'again' ? [16, 30, 16] : 10, settings?.hapticsEnabled ?? false);
+        setFlying(grade === 'again' ? 'left' : 'right');
+        timer.current = window.setTimeout(() => {
+          setFlying(null); setDx(0); setDy(0); setPos(p => p + 1);
+          if (pos + 1 >= deck.length) setFinished(true);
+          presentedAt.current = Date.now(); busy.current = false;
+        }, reduced ? 0 : 230);
+      } catch {
+        busy.current = false; setDx(0); setDy(0);
+        toast('Could not save this review. Please try again.', 'error');
+      }
     },
-    [current, flying, deck.length, reduced, settings],
+    [current, flying, deck.length, pos, reduced, settings, toast],
   );
 
   const undo = useCallback(async () => {
-    const last = historyRef.current.pop();
-    if (!last) {
-      toast('Nothing to undo');
-      return;
-    }
-    if (last.attemptId !== null) await db.attempts.delete(last.attemptId);
-    const itemId = last.prevReview?.itemId;
-    if (last.prevReview && itemId) await db.reviews.put(last.prevReview);
-    else if (itemId) await db.reviews.delete(itemId);
-    setPos((p) => Math.max(0, p - 1));
-    setFinished(false);
-    toast('Last grading undone');
+    if (busy.current) return;
+    const last = historyRef.current[historyRef.current.length - 1];
+    if (!last || last.attemptId === null) { toast('Nothing to undo'); return; }
+    busy.current = true;
+    try {
+      await undoAttempt(last.attemptId, last.cardId, last.prevReview, sessionId.current);
+      historyRef.current.pop();
+      setPos(p => Math.max(0, p - 1)); setFinished(false);
+      toast('Last grading undone');
+    } catch { toast('Undo could not be saved. Please try again.', 'error'); }
+    finally { busy.current = false; }
   }, [toast]);
 
   // Keyboard controls.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement)?.tagName === 'INPUT' || (e.target as HTMLElement)?.tagName === 'TEXTAREA') return;
+      if ((e.target as HTMLElement)?.closest('input, textarea, button, [contenteditable=true], [role=dialog]')) return;
       if (e.key === ' ' || e.key === 'Enter') {
         e.preventDefault();
         if (current && !current.revealed) reveal();
@@ -209,7 +179,7 @@ export function SwipeDeck() {
 
   // Pointer drag.
   const onPointerDown = (e: React.PointerEvent) => {
-    if (!current?.revealed || flying) return;
+    if (!current?.revealed || flying || busy.current) return;
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
     dragState.current = { x0: e.clientX, y0: e.clientY, t0: Date.now(), thresholdBuzzed: false };
     setDragging(true);
@@ -233,7 +203,8 @@ export function SwipeDeck() {
     const ndx = e.clientX - dragState.current.x0;
     const dt = Math.max(1, Date.now() - dragState.current.t0);
     const velocity = Math.abs(ndx) / dt;
-    const commit = Math.abs(ndx) > DRAG_COMMIT_PX || velocity > FLICK_VELOCITY;
+    const horizontal = Math.abs(ndx) > Math.abs(e.clientY - dragState.current.y0) * 1.2;
+    const commit = horizontal && (Math.abs(ndx) > DRAG_COMMIT_PX || (Math.abs(ndx) >= 40 && velocity > FLICK_VELOCITY));
     if (commit && current?.revealed) {
       void commitGrade(ndx < 0 ? 'again' : 'good');
     } else {
@@ -251,7 +222,7 @@ export function SwipeDeck() {
       <div className="flex items-center justify-between gap-2">
         <div className="flex gap-2">
           {([8, 12, 20] as const).map((n) => (
-            <Chip key={n} active={length === n} onClick={() => setLength(n)}>
+            <Chip key={n} active={length === n} onClick={() => { if (!busy.current) setLength(n); }}>
               {n} cards
             </Chip>
           ))}
@@ -289,6 +260,7 @@ export function SwipeDeck() {
                 onPointerDown={onPointerDown}
                 onPointerMove={onPointerMove}
                 onPointerUp={onPointerUp}
+                onPointerCancel={() => { setDragging(false); setDx(0); setDy(0); }}
                 onReveal={reveal}
               />
             )}
@@ -356,6 +328,7 @@ function SwipeCardView({
   onPointerDown,
   onPointerMove,
   onPointerUp,
+  onPointerCancel,
   onReveal,
 }: {
   card: DeckCard;
@@ -369,13 +342,14 @@ function SwipeCardView({
   onPointerDown?: (e: React.PointerEvent) => void;
   onPointerMove?: (e: React.PointerEvent) => void;
   onPointerUp?: (e: React.PointerEvent) => void;
+  onPointerCancel?: () => void;
   onReveal?: () => void;
 }) {
   const rotation = reduced ? 0 : Math.max(-14, Math.min(14, dx * 0.045));
   const style: React.CSSProperties = {
     transform: `translate(${dx}px, ${dy + depth * 8}px) rotate(${rotation}deg) scale(${1 - depth * 0.045})`,
     opacity: depth === 0 ? 1 : depth === 1 ? 0.75 : 0.45,
-    transition: dragging || flying ? 'none' : 'transform 420ms cubic-bezier(0.18, 0.89, 0.32, 1.12), opacity 300ms ease',
+    transition: reduced ? 'none' : dragging ? 'none' : flying ? 'transform 230ms ease-out' : 'transform 420ms cubic-bezier(0.18, 0.89, 0.32, 1.12), opacity 300ms ease',
     zIndex: 10 - depth,
   };
 
@@ -387,7 +361,7 @@ function SwipeCardView({
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
+      onPointerCancel={onPointerCancel}
     >
       <Card className="h-full p-6 flex flex-col">
         <div className="flex items-center justify-between">

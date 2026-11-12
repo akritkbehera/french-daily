@@ -68,8 +68,9 @@ export function applyReview(
   grade: GradeResult,
   today: IsoDate = todayLocal(),
   desiredRetention: number = DEFAULT_DESIRED_RETENTION,
+  explicitRating?: FsrsRating,
 ): ReviewState {
-  const rating = ratingFromGrade(grade);
+  const rating = explicitRating ?? ratingFromGrade(grade);
   const elapsed = Math.max(0, dayDiff(state.lastReviewed, today));
   const prev = state.reviewCount === 0
     ? null

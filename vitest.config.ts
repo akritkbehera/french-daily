@@ -17,7 +17,7 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: [path.resolve(root, 'vitest.setup.ts')],
-    include: ['packages/**/*.test.ts', 'apps/web/src/**/*.test.{ts,tsx}'],
+    include: ['packages/**/*.test.ts', 'apps/web/src/**/*.test.{ts,tsx}', 'docs/audit/reproduce.test.tsx'],
     css: false,
   },
 });

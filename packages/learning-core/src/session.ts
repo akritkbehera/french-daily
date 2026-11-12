@@ -6,175 +6,91 @@
  * incorrectly — failed items are appended as explicit retries (max 2 per item).
  */
 import {
-  generateSentenceExercise,
-  generateVerbExercise,
-  generateVocabExercise,
-  type ExerciseSources,
-  type FilterOptions,
-  rngFromSeed,
+  makeEnToFrTranslation, makeFrToEnTranslation, makeGenderExercise,
+  makeVocabMultipleChoice, makeConjugationFill, makeConjugationDirect,
+  makeConjugationMultipleChoice, makeSentenceConstruction, makeWordOrder,
+  type ExerciseSources, rngFromSeed,
 } from './exercises';
 import { gradeSelection, gradeTypedAnswer } from './grading';
-import { type Rng, shuffle } from './random';
+import { shuffle } from './random';
 import { isReviewDue, reviewPriority } from './spacedRepetition';
-import type {
-  Exercise,
-  GradeResult,
-  ReviewState,
-  SessionConfig,
-  SessionItem,
-  SessionSection,
-  SessionState,
-  SessionSummary,
-  WeakArea,
-} from './types';
+import type { Exercise, GradeResult, ReviewState, SessionConfig, SessionItem, SessionSection, SessionState, SessionSummary, WeakArea } from './types';
+import { PRONOUNS } from './types';
 import { todayLocal, type IsoDate } from './dates';
 
-/** Session sizes: exercises per section. */
-export const SESSION_SIZES = {
-  short: 3,
-  standard: 5,
-  long: 7,
-} as const;
-
+export const SESSION_SIZES = { short: 3, standard: 5, long: 7 } as const;
 export function defaultSessionConfig(size: 'short' | 'standard' | 'long' = 'standard'): SessionConfig {
   const n = SESSION_SIZES[size];
   return { mode: 'daily', nouns: n, verbs: n, sentences: n, topics: 'all', levels: 'all', kinds: 'all' };
 }
-
 const MAX_RETRIES_PER_ITEM = 2;
 
-function filterFrom(config: SessionConfig): FilterOptions {
-  return { topics: config.topics, levels: config.levels, kinds: config.kinds };
+/** All independently scheduled recall tasks; deterministic IDs survive updates. */
+const catalogs = new WeakMap<ExerciseSources, Exercise[]>();
+export function exerciseCatalog(sources: ExerciseSources): Exercise[] {
+  const cached = catalogs.get(sources);
+  if (cached) return cached;
+  const rng = rngFromSeed('catalog-v2');
+  const exercises = [
+    ...sources.vocabulary.flatMap(v => [
+      makeEnToFrTranslation(v, () => 0), makeEnToFrTranslation(v, () => 0.9),
+      makeFrToEnTranslation(v), makeGenderExercise(v, 'definite'),
+      ...(v.countable === false ? [] : [makeGenderExercise(v, 'indefinite')]),
+      makeVocabMultipleChoice(v, sources.vocabulary, rng, 'en-fr'),
+      makeVocabMultipleChoice(v, sources.vocabulary, rng, 'fr-en'),
+    ]),
+    ...sources.verbs.flatMap(v => PRONOUNS.flatMap(p => [
+      makeConjugationFill(v, p, v.fillComplement), makeConjugationDirect(v, p),
+      makeConjugationMultipleChoice(v, p, rng),
+    ])),
+    ...sources.sentences.flatMap(s => [makeSentenceConstruction(s, 'en-fr'), makeSentenceConstruction(s, 'fr-en'), makeWordOrder(s, rng)]),
+  ];
+  const catalog = [...new Map(exercises.map(ex => [ex.id, ex])).values()];
+  catalogs.set(sources, catalog);
+  return catalog;
 }
 
-/**
- * Build a session. Items already due for review are prioritised, then
- * previously-failed items, then unseen items (weighted toward new material).
- */
 export function buildSession(
-  config: SessionConfig,
-  sources: ExerciseSources,
-  reviewStates: Map<string, ReviewState>,
-  today: IsoDate = todayLocal(),
-  seed: string | number = today + JSON.stringify(config),
+  config: SessionConfig, sources: ExerciseSources, reviewStates: Map<string, ReviewState>,
+  today: IsoDate = todayLocal(), seed: string | number = today + JSON.stringify(config),
 ): SessionState {
   const rng = rngFromSeed(seed);
-  const filter = filterFrom(config);
-  const items: SessionItem[] = [];
-  const usedIds = new Set<string>();
-
-  if (config.nouns > 0) {
-    const exs = pickVocabExercises(sources, reviewStates, config.nouns, rng, filter, today, usedIds);
-    for (const exercise of exs) items.push(toSessionItem(exercise, 'nouns'));
+  const catalog = exerciseCatalog(sources);
+  const accepts = (ex: Exercise) =>
+    (config.topics === 'all' || config.topics.includes(ex.topic)) &&
+    (config.levels === 'all' || config.levels.includes(ex.level)) &&
+    (config.kinds === 'all' || config.kinds.includes(ex.kind));
+  const candidates = catalog.filter(accepts);
+  // Legacy input remains supported for callers/imports. Bind a legacy state to
+  // one task, never copy a lemma's mastery to every recall direction.
+  const states = new Map(reviewStates);
+  for (const state of reviewStates.values()) {
+    if (!state.itemId.includes('::')) {
+      const ex = candidates.find(e => e.itemId === state.itemId);
+      if (ex) states.set(ex.id, state);
+    }
   }
-  if (config.verbs > 0) {
-    const exs = pickVerbExercises(sources, reviewStates, config.verbs, rng, filter, today, usedIds);
-    for (const exercise of exs) items.push(toSessionItem(exercise, 'verbs'));
+  const due = candidates.filter(ex => states.has(ex.id) && isReviewDue(states.get(ex.id), today));
+  due.sort((a, b) => reviewPriority(states.get(a.id), today) - reviewPriority(states.get(b.id), today));
+  const unseen = shuffle(candidates.filter(ex => !states.has(ex.id)), rng);
+  const sectionFor = (ex: Exercise): SessionSection => ex.reviewKind === 'vocab' ? 'nouns' : ex.reviewKind === 'verb' ? 'verbs' : 'sentences';
+  const chosen: Exercise[] = [];
+  if (config.mode === 'review') {
+    chosen.push(...due.slice(0, config.nouns + config.verbs + config.sentences));
+  } else {
+    const counts = { nouns: 0, verbs: 0, sentences: 0 };
+    const used = new Set<string>();
+    for (const ex of [...due, ...unseen]) {
+      const section = sectionFor(ex);
+      if (counts[section] >= config[section] || used.has(ex.itemId)) continue;
+      chosen.push(ex); used.add(ex.itemId); counts[section]++;
+    }
   }
-  if (config.sentences > 0) {
-    const exs = pickSentenceExercises(sources, reviewStates, config.sentences, rng, filter, today, usedIds);
-    for (const exercise of exs) items.push(toSessionItem(exercise, 'sentences'));
-  }
-
-  return {
-    id: `session-${today}-${Math.floor(rng() * 1e9).toString(36)}`,
-    config,
-    items,
-    startedAt: Date.now(),
-    finishedAt: null,
-    complete: false,
-  };
+  return { id: `session-${today}-${Math.floor(rng() * 1e9).toString(36)}`, config,
+    items: chosen.map(ex => toSessionItem(ex, sectionFor(ex))), startedAt: Date.now(), finishedAt: null, complete: false };
 }
-
 function toSessionItem(exercise: Exercise, section: SessionSection, retry = false): SessionItem {
   return { exercise, section, answered: false, response: null, grade: null, retry };
-}
-
-function pickVocabExercises(
-  sources: ExerciseSources,
-  states: Map<string, ReviewState>,
-  count: number,
-  rng: Rng,
-  filter: FilterOptions,
-  today: IsoDate,
-  usedIds: Set<string>,
-): Exercise[] {
-  const pool = sources.vocabulary.filter((v) => !usedIds.has(v.id));
-  const ordered = orderPool(pool.map((v) => v.id), states, today, rng);
-  const byId = new Map(pool.map((v) => [v.id, v]));
-  const out: Exercise[] = [];
-  for (const id of ordered) {
-    if (out.length >= count) break;
-    const item = byId.get(id);
-    if (!item) continue;
-    const ex = generateVocabExercise(item, sources.vocabulary, rng, filter);
-    if (!ex) continue;
-    usedIds.add(id);
-    out.push(ex);
-  }
-  return out;
-}
-
-function pickVerbExercises(
-  sources: ExerciseSources,
-  states: Map<string, ReviewState>,
-  count: number,
-  rng: Rng,
-  filter: FilterOptions,
-  today: IsoDate,
-  usedIds: Set<string>,
-): Exercise[] {
-  const pool = sources.verbs.filter((v) => !usedIds.has(v.id));
-  const ordered = orderPool(pool.map((v) => v.id), states, today, rng);
-  const byId = new Map(pool.map((v) => [v.id, v]));
-  const out: Exercise[] = [];
-  for (const id of ordered) {
-    if (out.length >= count) break;
-    const verb = byId.get(id);
-    if (!verb) continue;
-    const ex = generateVerbExercise(verb, verb.fillComplement, rng, filter);
-    if (!ex) continue;
-    usedIds.add(id);
-    out.push(ex);
-  }
-  return out;
-}
-
-function pickSentenceExercises(
-  sources: ExerciseSources,
-  states: Map<string, ReviewState>,
-  count: number,
-  rng: Rng,
-  filter: FilterOptions,
-  today: IsoDate,
-  usedIds: Set<string>,
-): Exercise[] {
-  const pool = sources.sentences.filter((s) => !usedIds.has(s.id));
-  const ordered = orderPool(pool.map((s) => s.id), states, today, rng);
-  const byId = new Map(pool.map((s) => [s.id, s]));
-  const out: Exercise[] = [];
-  for (const id of ordered) {
-    if (out.length >= count) break;
-    const pair = byId.get(id);
-    if (!pair) continue;
-    const ex = generateSentenceExercise(pair, rng, filter);
-    if (!ex) continue;
-    usedIds.add(id);
-    out.push(ex);
-  }
-  return out;
-}
-
-/**
- * Order a content pool for selection:
- *   1. due review items first (most overdue / most difficult),
- *   2. then remaining items shuffled (unseen material mixed in).
- */
-function orderPool(ids: string[], states: Map<string, ReviewState>, today: IsoDate, rng: Rng): string[] {
-  const due = ids.filter((id) => isReviewDue(states.get(id), today));
-  const notDue = ids.filter((id) => !isReviewDue(states.get(id), today));
-  due.sort((a, b) => reviewPriority(states.get(a), today) - reviewPriority(states.get(b), today));
-  return [...due, ...shuffle(notDue, rng)];
 }
 
 /**
@@ -204,7 +120,7 @@ export function answerSessionItem(
   items[idx] = { ...item, answered: true, response, grade };
 
   // Schedule an in-session retry for incorrect answers on non-retry items.
-  if (!grade.isCorrect && !item.retry) {
+  if (!grade.isCorrect) {
     const retriesSoFar = items.filter(
       (it) => it.exercise.itemId === exercise.itemId && it.retry,
     ).length;

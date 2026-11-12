@@ -30,7 +30,7 @@ export function VerbsScreen() {
 
   return (
     <Screen>
-      <SectionTitle
+      <SectionTitle level={1}
         action={
           <Button
             variant="secondary"

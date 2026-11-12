@@ -44,6 +44,8 @@ export function buildVocabulary(raw: RawVocabEntry[]): VocabItem[] {
     const elision = r.elision ?? startsWithVowelSound(r.french);
     return {
       id: r.id ?? `noun:${r.french}`,
+      number: r.number ?? 'singular',
+      countable: r.countable ?? true,
       french: r.french,
       english: r.english,
       gender: r.gender,
