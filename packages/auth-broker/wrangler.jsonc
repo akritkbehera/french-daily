@@ -1,0 +1,12 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "french-daily-github-auth",
+  "main": "dist/index.js",
+  "compatibility_date": "2026-11-12",
+  "vars": {
+    "APP_URL": "https://akritkbehera.github.io/french-daily/",
+    "GITHUB_OWNER": "akritkbehera",
+    "GITHUB_REPO": "french-daily"
+  },
+  "d1_databases": [{ "binding": "DB", "database_name": "french-daily-auth", "database_id": "REPLACE_WITH_CREATED_D1_ID" }]
+}

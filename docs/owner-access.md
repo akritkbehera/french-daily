@@ -1,20 +1,16 @@
-# Personal owner access
+# Owner access
 
-The deployed interface is for the GitHub repository owner. GitHub Actions sets
-`VITE_REPOSITORY_OWNER` from `github.repository_owner`; the fallback is
-`akritkbehera`. A fork should set this at build time to its own owner.
+Manual token entry has been removed. French Daily now supports **Continue with
+GitHub**, with repository writes restricted server-side to `akritkbehera`.
+See [GitHub sync setup](github-sync.md) for the one-time App registration and
+authentication Worker deployment.
 
-To unlock, create a short-lived fine-grained GitHub personal access token with
-no repository or account permissions, and enter it into the app's password field.
-The browser sends the token only to `https://api.github.com/user`, verifies the
-returned login, then discards it. It is never put in storage, logs, URLs, backups
-or the repository. Owner verification requires internet access. A non-secret
-verification marker lasts in this tab's session storage for seven days so offline
-reloads work. Lock clears that marker without deleting learning progress.
+Local practice remains usable when signed out or offline. The public progress
+JSON lives on the `progress-data` branch of the same repository. The browser
+never receives the GitHub access/refresh tokens; it receives an opaque revocable
+app session. GitHub credentials are encrypted in the broker's credential store.
+No credentials or app sessions are included in progress exports or sync files.
 
-This is an interface lock, not a server-enforced access boundary. GitHub Pages
-serves the code and datasets publicly. Someone can download the source or alter
-the client to bypass the lock. No other visitor can thereby read this device's
-IndexedDB. Do not store confidential shared assets in this public deployment.
-True private hosting requires server/edge authentication or an eligible private
-Pages setup. No OAuth app/client secret or backend has been provisioned here.
+This does not make the public app or progress private. Owner authorization
+protects writes. Readers can access the source and progress JSON on GitHub, as
+requested. Your device's IndexedDB remains the offline working copy.

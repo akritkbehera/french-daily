@@ -7,6 +7,7 @@
  * asked otherwise. Nothing is ever silently discarded.
  */
 import type { AppSettings, ReviewState, SessionCompletionRecord, AttemptRecord, MilestoneRecord } from '@french-daily/learning-core';
+import { eventId } from '../sync/identity';
 import { todayLocal } from '@french-daily/learning-core';
 import { db, DEFAULT_SETTINGS, normalizeHistory, type ChallengeRow } from './db';
 import { getSettings, saveSettings } from './repos';
@@ -19,6 +20,7 @@ export interface BackupFile {
   backupVersion: number;
   exportedAt: string;
   settings: AppSettings;
+  deletedEvents?: string[];
   reviews: ReviewState[];
   attempts: AttemptRecord[];
   sessions: SessionCompletionRecord[];
@@ -35,6 +37,7 @@ export async function exportProgress(): Promise<BackupFile> {
     backupVersion: BACKUP_VERSION,
     exportedAt: new Date().toISOString(),
     settings,
+    deletedEvents: (await db.tombstones.toArray()).map(t => t.id),
     reviews: await db.reviews.toArray(),
     attempts: await db.attempts.toArray(),
     sessions: await db.sessions.toArray(),
@@ -84,11 +87,11 @@ export async function importProgress(json: string, opts: { keepTheme?: boolean }
     const normalized = normalizeHistory(b.reviews!, b.attempts!);
     const current = await getSettings();
     const restoredSettings = { ...DEFAULT_SETTINGS, ...b.settings, ...(opts.keepTheme ? { theme: current.theme } : {}), id: 'settings' as const };
-    await db.transaction('rw', [db.reviews, db.attempts, db.sessions, db.milestones, db.challenges, db.settings, db.snapshots], async () => {
+    await db.transaction('rw', [db.reviews, db.attempts, db.sessions, db.milestones, db.challenges, db.settings, db.snapshots, db.tombstones], async () => {
       await db.snapshots.add({ createdAt: Date.now(), data: {
         reviews: await db.reviews.toArray(), attempts: await db.attempts.toArray(),
         sessions: await db.sessions.toArray(), milestones: await db.milestones.toArray(),
-        challenges: await db.challenges.toArray(), settings: await db.settings.toArray(),
+        challenges: await db.challenges.toArray(), settings: await db.settings.toArray(), deletedEvents: (await db.tombstones.toArray()).map(t => t.id),
       } });
       await db.reviews.clear(); await db.attempts.clear(); await db.sessions.clear();
       await db.milestones.clear(); await db.challenges.clear();
@@ -98,6 +101,8 @@ export async function importProgress(json: string, opts: { keepTheme?: boolean }
       await db.milestones.bulkAdd((b.milestones ?? []) as MilestoneRecord[]);
       await db.challenges.bulkPut((b.challenges ?? []).map(c => ({ ...c, id: `${c.date}::${c.def.id}` })) as ChallengeRow[]);
       await db.settings.put(restoredSettings);
+      await db.tombstones.clear();
+      await db.tombstones.bulkPut((b.deletedEvents ?? []).map(id => ({ id })));
     });
   } catch { return { ok: false, error: 'Restore failed. Your previous progress was kept. Check available storage and try again.' }; }
 
@@ -119,18 +124,19 @@ const text = (v: unknown): v is string => typeof v === 'string' && v.length > 0;
 const number = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0;
 const date = (v: unknown): boolean => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && new Date(`${v}T12:00:00Z`).toISOString().slice(0,10) === v;
 const oneOf = (v: unknown, choices: unknown[]) => choices.includes(v);
-function validateBackup(b: Partial<BackupFile>): string | null {
+export function validateBackup(b: Partial<BackupFile>): string | null {
   try {
+    if (b.deletedEvents !== undefined && (!Array.isArray(b.deletedEvents) || b.deletedEvents.some(id => typeof id !== 'string'))) return 'Invalid deleted events.';
     if (!b.reviews!.every(v => row(v) && text(v.itemId) && oneOf(v.kind, ['vocab','verb','sentence']) && oneOf(v.status, ['new','learning','review']) && date(v.lastReviewed) && date(v.nextDue) && ['reviewCount','correctCount','incorrectCount','lapseCount','reps','interval','stability','difficulty'].every(k => number((v as unknown as Row)[k])) && v.difficulty >= 1 && v.difficulty <= 10 && oneOf(v.lastRating, [null,1,2,3,4]))) return 'Invalid review record in backup.';
     if (new Set(b.reviews!.map(r => r.itemId)).size !== b.reviews!.length) return 'Duplicate review IDs in backup.';
-    if (!b.attempts!.every(v => row(v) && text(v.itemId) && oneOf(v.kind,['vocab','verb','sentence']) && oneOf(v.exerciseKind,['translation-typed','conjugation-fill','conjugation-direct','sentence-construction','multiple-choice','word-order','gender-select']) && date(v.date) && number(v.timestamp) && typeof v.response === 'string' && oneOf(v.outcome,['correct','accent','typo','article','wrong']) && typeof v.correct === 'boolean' && text(v.sessionId) && (v.durationMs === null || number(v.durationMs)) && oneOf(v.rating,[1,2,3,4]))) return 'Invalid attempt record in backup.';
-    if (b.sessions !== undefined && (!Array.isArray(b.sessions) || !b.sessions.every(v => row(v) && text(v.sessionId) && oneOf(v.mode,['daily','custom','review']) && date(v.date) && ['timestamp','total','correct','incorrect','accuracy'].every(k => number((v as unknown as Row)[k])) && v.accuracy <= 100 && v.total === v.correct + v.incorrect && (v.durationMs === null || number(v.durationMs))))) return 'Invalid session record in backup.';
+    if (!b.attempts!.every(v => row(v) && text(v.itemId) && (v.eventId === undefined || text(v.eventId)) && oneOf(v.kind,['vocab','verb','sentence']) && oneOf(v.exerciseKind,['translation-typed','conjugation-fill','conjugation-direct','sentence-construction','multiple-choice','word-order','gender-select']) && date(v.date) && number(v.timestamp) && typeof v.response === 'string' && oneOf(v.outcome,['correct','accent','typo','article','wrong']) && typeof v.correct === 'boolean' && text(v.sessionId) && (v.durationMs === null || number(v.durationMs)) && oneOf(v.rating,[1,2,3,4]))) return 'Invalid attempt record in backup.';
+    if (b.sessions !== undefined && (!Array.isArray(b.sessions) || !b.sessions.every(v => row(v) && text(v.sessionId) && (v.syncId === undefined || text(v.syncId)) && oneOf(v.mode,['daily','custom','review']) && date(v.date) && ['timestamp','total','correct','incorrect','accuracy'].every(k => number((v as unknown as Row)[k])) && v.accuracy <= 100 && v.total === v.correct + v.incorrect && (v.durationMs === null || number(v.durationMs))))) return 'Invalid session record in backup.';
     if (b.milestones !== undefined && (!Array.isArray(b.milestones) || !b.milestones.every(v => row(v) && oneOf(v.kind,['vocab-mastered','verbs-mastered','accuracy-record','weekly-consistency','recovery','reviews-total']) && text(v.label) && date(v.date) && number(v.value) && number(v.achievedAt)))) return 'Invalid milestone record in backup.';
     if (b.challenges !== undefined && (!Array.isArray(b.challenges) || !b.challenges.every(v => row(v) && text(v.id) && date(v.date) && number(v.progress) && typeof v.completed === 'boolean' && row(v.def) && text(v.def.id) && text(v.def.title) && text(v.def.description) && text(v.def.derivedFrom) && number(v.def.target) && oneOf(v.def.kind,['recall-nouns','irregular-conjugations','fix-missed','build-sentences','finish-reviews','accuracy-run']) && (v.def.itemIds === undefined || (Array.isArray(v.def.itemIds) && v.def.itemIds.every(text)))))) return 'Invalid challenge record in backup.';
     if (b.settings !== undefined) {
       if (!row(b.settings)) return 'Invalid settings in backup.';
       const settings = { ...DEFAULT_SETTINGS, ...b.settings };
-      if (settings.id !== 'settings' || !oneOf(settings.theme,['light','dark','system']) || !oneOf(settings.sessionSize,['short','standard','long']) || !number(settings.desiredRetention) || settings.desiredRetention < 0.7 || settings.desiredRetention > 0.99 || !number(settings.dailyGoalMinutes) || settings.dailyGoalMinutes < 1 || settings.dailyGoalMinutes > 120 || !number(settings.streak) || !number(settings.longestStreak) || (settings.lastCompletionDate !== null && !date(settings.lastCompletionDate)) || (settings.lastExportAt !== null && !number(settings.lastExportAt)) || ['soundEnabled','hapticsEnabled','celebrationsEnabled','streaksEnabled','pronunciationEnabled','notificationsEnabled'].some(k => typeof (settings as unknown as Row)[k] !== 'boolean')) return 'Invalid settings in backup.';
+      if ((settings.updatedAt !== undefined && !number(settings.updatedAt)) || settings.id !== 'settings' || !oneOf(settings.theme,['light','dark','system']) || !oneOf(settings.sessionSize,['short','standard','long']) || !number(settings.desiredRetention) || settings.desiredRetention < 0.7 || settings.desiredRetention > 0.99 || !number(settings.dailyGoalMinutes) || settings.dailyGoalMinutes < 1 || settings.dailyGoalMinutes > 120 || !number(settings.streak) || !number(settings.longestStreak) || (settings.lastCompletionDate !== null && !date(settings.lastCompletionDate)) || (settings.lastExportAt !== null && !number(settings.lastExportAt)) || ['soundEnabled','hapticsEnabled','celebrationsEnabled','streaksEnabled','pronunciationEnabled','notificationsEnabled'].some(k => typeof (settings as unknown as Row)[k] !== 'boolean')) return 'Invalid settings in backup.';
     }
     return null;
   } catch { return 'Malformed backup data.'; }
@@ -142,7 +148,9 @@ function validateBackup(b: Partial<BackupFile>): string | null {
  * in the UI before calling.
  */
 export async function resetProgress(includeSettings = false): Promise<void> {
-  await db.transaction('rw', [db.reviews, db.attempts, db.sessions, db.milestones, db.challenges, db.settings], async () => {
+  await db.transaction('rw', [db.reviews, db.attempts, db.sessions, db.milestones, db.challenges, db.settings, db.tombstones], async () => {
+    const ids = [...(await db.attempts.toArray()).map(eventId), ...(await db.sessions.toArray()).map(s => `session:${s.syncId ?? s.sessionId}`), ...(await db.reviews.toArray()).map(r => `review:${r.itemId}`), ...(await db.milestones.toArray()).map(m => `milestone:${m.kind}:${m.value}:${m.achievedAt}`)];
+    await db.tombstones.bulkPut(ids.map(id => ({ id })));
     await db.reviews.clear();
     await db.attempts.clear();
     await db.sessions.clear();
@@ -165,7 +173,7 @@ export async function exportRecoverySnapshot(): Promise<BackupFile | null> {
   return { app: 'french-daily', kind: 'progress-backup', backupVersion: 1,
     exportedAt: new Date(latest.createdAt).toISOString(), settings: { ...DEFAULT_SETTINGS, ...(row(settings) ? settings : {}) },
     reviews: data.reviews as ReviewState[], attempts: data.attempts as AttemptRecord[],
-    sessions: data.sessions as SessionCompletionRecord[], milestones: data.milestones as MilestoneRecord[], challenges: data.challenges as ChallengeRow[] };
+    sessions: data.sessions as SessionCompletionRecord[], milestones: data.milestones as MilestoneRecord[], challenges: data.challenges as ChallengeRow[], deletedEvents: data.deletedEvents as string[] | undefined };
 }
 
 /** Trigger a browser download of the backup. */

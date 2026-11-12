@@ -4,6 +4,7 @@
  */
 import { useEffect } from 'react';
 import { OwnerGate } from './components/OwnerGate';
+import { SyncControl } from './components/SyncControl';
 import { UpdateNotice } from './components/UpdateNotice';
 import { AppProvider, useApp } from './hooks/useApp';
 import { Nav } from './components/Nav';
@@ -90,7 +91,7 @@ function Shell() {
 export function App() {
   return (
     <OwnerGate><AppProvider>
-      <Shell /><UpdateNotice />
+      <Shell /><UpdateNotice /><SyncControl />
     </AppProvider></OwnerGate>
   );
 }

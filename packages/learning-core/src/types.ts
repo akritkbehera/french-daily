@@ -367,6 +367,7 @@ export interface WeakArea {
 /* ------------------------------------------------------------------ */
 
 export interface AttemptRecord {
+  eventId?: string;
   contentId?: string;
   id?: number;
   itemId: string;
@@ -386,6 +387,7 @@ export interface AttemptRecord {
 }
 
 export interface SessionCompletionRecord {
+  syncId?: string;
   id?: number;
   sessionId: string;
   mode: SessionMode;
@@ -448,6 +450,7 @@ export interface MilestoneRecord {
 }
 
 export interface AppSettings {
+  updatedAt?: number;
   id: 'settings';
   theme: 'light' | 'dark' | 'system';
   /** Exercises per section in a daily session. */

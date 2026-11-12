@@ -21,6 +21,8 @@ import {
 } from '@french-daily/learning-core';
 import { generateChallenges, refreshChallenges, type ChallengeContext } from '@french-daily/learning-core';
 import { irregularVerbIds, sources } from '@french-daily/french-data';
+import { requestSessionSync } from '../sync/events';
+import { eventId } from '../sync/identity';
 import { DEFAULT_SETTINGS, db, type ChallengeRow } from './db';
 
 /* ---------------- settings ---------------- */
@@ -32,7 +34,7 @@ export async function getSettings(): Promise<AppSettings> {
 
 export async function saveSettings(patch: Partial<AppSettings>): Promise<AppSettings> {
   const current = await getSettings();
-  const next = { ...current, ...patch, id: 'settings' as const };
+  const next = { ...current, ...patch, updatedAt: Date.now(), id: 'settings' as const };
   await db.settings.put(next);
   return next;
 }
@@ -55,6 +57,7 @@ export interface RecordAttemptInput {
 
 export interface RecordAttemptResult {
   attemptId: number | null;
+  eventId: string;
   reviewState: ReviewState;
 }
 
@@ -67,6 +70,7 @@ export async function recordAttempt(input: RecordAttemptInput): Promise<RecordAt
   const { exercise, grade } = input;
 
   const attempt: AttemptRecord = {
+    eventId: crypto.randomUUID(),
     itemId: exercise.id,
     contentId: exercise.itemId,
     kind: exercise.reviewKind,
@@ -86,7 +90,7 @@ export async function recordAttempt(input: RecordAttemptInput): Promise<RecordAt
     const updated = { ...applyReview(existing, grade, today, settings.desiredRetention, input.rating), contentId: exercise.itemId, exercise };
     const attemptId = (await db.attempts.add(attempt)) as number;
     await db.reviews.put(updated);
-    return { attemptId, reviewState: updated };
+    return { attemptId, eventId: attempt.eventId!, reviewState: updated };
   });
   // Derived projections must never turn an already committed review into a failed save.
   await refreshTodaysChallenges().catch(() => undefined);
@@ -104,6 +108,7 @@ export async function recordSessionCompletion(
 ): Promise<{ streak: number; longestStreak: number }> {
   const today = todayLocal();
   const record: SessionCompletionRecord = {
+    syncId: crypto.randomUUID(),
     sessionId: sessionId ?? `${today}-${Date.now().toString(36)}`,
     mode,
     date: today,
@@ -126,6 +131,7 @@ export async function recordSessionCompletion(
   const longestStreak = Math.max(settings.longestStreak, streak);
   await saveSettings({ streak, longestStreak, lastCompletionDate: today });
   await refreshTodaysChallenges();
+  requestSessionSync();
   return { streak, longestStreak };
 }
 
@@ -246,14 +252,26 @@ export function gradeSwipe(exercise: Exercise, known: boolean): GradeResult {
 }
 
 /** Restore the exact review and its log in one transaction. */
-export async function undoAttempt(attemptId: number, cardId: string, previous: ReviewState | null, sessionId: string): Promise<void> {
-  await db.transaction('rw', [db.attempts, db.reviews, db.sessions], async () => {
-    await db.attempts.delete(attemptId);
-    if (previous) await db.reviews.put(previous); else await db.reviews.delete(cardId);
+export async function undoAttempt(attemptId: number, cardId: string, previous: ReviewState | null, sessionId: string, stableEventId?: string): Promise<void> {
+  const settingsBefore = await getSettings();
+  await db.transaction('rw', [db.attempts, db.reviews, db.sessions, db.tombstones], async () => {
+    const attempt = stableEventId ? await db.attempts.filter(a => eventId(a) === stableEventId).first() : await db.attempts.get(attemptId);
+    if (attempt) await db.tombstones.put({ id: eventId(attempt) });
+    for (const completion of await db.sessions.where('sessionId').equals(sessionId).toArray()) await db.tombstones.put({ id: `session:${completion.syncId ?? sessionId}` });
+    if (!attempt?.id) throw new Error('This review no longer exists.');
+    await db.attempts.delete(attempt.id);
+    const remaining = (await db.attempts.where('itemId').equals(cardId).toArray()).sort((a,b) => a.timestamp - b.timestamp || eventId(a).localeCompare(eventId(b)));
+    if (remaining.length) {
+      const metadata = await db.reviews.get(cardId);
+      let state = initialReviewState(cardId, remaining[0].kind, remaining[0].date);
+      for (const a of remaining) state = applyReview(state, { outcome: a.outcome, given: a.response, expected: '', isCorrect: a.correct, isTypo: false, feedback: '', explanation: '' }, a.date, settingsBefore.desiredRetention, a.rating);
+      await db.reviews.put({ ...state, contentId: metadata?.contentId, exercise: metadata?.exercise });
+    } else if (previous) await db.reviews.put(previous); else await db.reviews.delete(cardId);
     await db.sessions.where('sessionId').equals(sessionId).delete();
   });
   const settings = await getSettings();
   const dates = await db.sessions.orderBy('date').uniqueKeys();
   await saveSettings({ streak: settings.streaksEnabled ? computeStreak(dates as string[]) : 0 });
   await refreshTodaysChallenges().catch(() => undefined);
+  requestSessionSync();
 }

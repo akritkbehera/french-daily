@@ -119,15 +119,20 @@ No backend. No API keys. No analytics. All progress lives in your browser's Inde
 
 MIT — see [LICENSE](LICENSE).
 
-## Personal owner mode and reliability update
+## GitHub sign-in and cross-device progress
 
-The published interface now verifies the repository owner's GitHub account.
-See [owner access](docs/owner-access.md) for the minimal token setup and the
-limits of a public static site's interface lock. Learning history stays local.
+Choose **Continue with GitHub** and use **Sync** whenever needed. Completed
+sessions automatically sync to `progress.json` on this repository's
+`progress-data` branch. Offline reviews remain saved locally until they sync.
+The progress JSON is intentionally public; credentials are never included.
 
-See [the learning engine](docs/learning-engine.md) for the four recall ratings,
-independent card schedules, due-only reviews, migration and backup recovery.
-The repair includes transactional saves, complete undo, stable challenges,
-plural-aware French content, an update notification and browser tests in CI.
-The original audit is retained in [docs/audit/REPORT.md](docs/audit/REPORT.md);
-its reproduction suite has been converted to passing regression assertions.
+**One-time activation:** run `npm run setup:sync` on your own computer. This
+registers the GitHub App, deploys the small authentication Worker, installs its
+connection, sets the frontend endpoint and triggers Pages deployment. You must
+approve the GitHub registration/installation and sign in to your Cloudflare
+account. Until that setup is complete, local practice works and the interface
+clearly reports that GitHub sync is not connected.
+
+See [setup and sync behavior](docs/github-sync.md), [owner access](docs/owner-access.md),
+and [the learning engine](docs/learning-engine.md). The historical audit and its
+regression tests remain under [docs/audit](docs/audit/REPORT.md).

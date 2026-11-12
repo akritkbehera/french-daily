@@ -15,17 +15,18 @@
   "scripts": {
     "dev": "npm run dev --workspace @fd/web",
     "build": "npm run build:packages && npm run build:web",
-    "build:packages": "npm run build --workspace @french-daily/mcp-server",
+    "build:packages": "npm run build --workspace @french-daily/mcp-server && npm run build --workspace @fd/auth-broker",
     "build:web": "npm run build --workspace @fd/web",
     "preview": "npm run preview --workspace @fd/web",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit -p packages/learning-core/tsconfig.json && tsc --noEmit -p packages/french-data/tsconfig.json && tsc --noEmit -p packages/mcp-server/tsconfig.json && tsc --noEmit -p apps/web/tsconfig.json",
+    "typecheck": "tsc --noEmit -p packages/learning-core/tsconfig.json && tsc --noEmit -p packages/french-data/tsconfig.json && tsc --noEmit -p packages/mcp-server/tsconfig.json && tsc --noEmit -p apps/web/tsconfig.json && tsc --noEmit -p packages/auth-broker/tsconfig.json",
     "check": "npm run lint && npm run typecheck && npm run test && npm run build",
     "icons": "node scripts/generate-icons.mjs",
-    "test:mcp": "node scripts/test-mcp.mjs"
+    "test:mcp": "node scripts/test-mcp.mjs",
+    "setup:sync": "node scripts/setup-github-sync.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",

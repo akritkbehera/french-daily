@@ -1,6 +1,7 @@
 /**
  * App-level state: settings, theme, navigation, session launching, toasts.
  */
+import { useLiveQuery } from 'dexie-react-hooks';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { AppSettings, SessionConfig } from '@french-daily/learning-core';
 import { defaultSessionConfig, customSessionConfig } from '@french-daily/learning-core';
@@ -51,6 +52,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     getSettings().then(setSettings);
   }, []);
+
+  const syncedSettings = useLiveQuery(getSettings, []);
+  useEffect(() => { if (syncedSettings) setSettings(syncedSettings); }, [syncedSettings]);
 
   // Theme: explicit choice or system preference.
   useEffect(() => {
