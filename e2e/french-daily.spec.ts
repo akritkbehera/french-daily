@@ -180,7 +180,7 @@ test.describe('review scheduling and persistence', () => {
     // The attempt survives the reload: the Progress screen counts it.
     await page.getByRole('button', { name: 'Progress', exact: true }).first().click();
     await expect(page.getByText('Learning quality')).toBeVisible();
-    await expect(page.getByText(/answers/)).toBeVisible();
+    await expect(page.getByText(/^1 answer$/)).toBeVisible();
   });
 
   test('completed sessions show an honest summary and count toward streaks', async ({ page }) => {
