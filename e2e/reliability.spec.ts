@@ -13,25 +13,17 @@ async function storeRows(page: Page, name: string) {
   }), name);
 }
 async function unlockFixture(page: Page) {
-  await page.addInitScript(() => sessionStorage.setItem('french-daily-owner-session', JSON.stringify({ login: 'akritkbehera', verifiedAt: Date.now() })));
+  await page.addInitScript(() => sessionStorage.setItem('french-daily-local-mode', 'yes'));
   await page.goto('./');
   await expect(page.getByTestId('reveal-answer-button')).toBeVisible();
 }
 
-test('owner sign-in rejects others, accepts the owner, and locks again', async ({ page }) => {
-  let login = 'another-user';
-  await page.route('https://api.github.com/user', route => route.fulfill({ json: { login } }));
+test('offers GitHub sign-in and local practice without token entry', async ({ page }) => {
   await page.goto('./');
-  await expect(page.getByRole('button', { name: 'Start daily practice →' })).toHaveCount(0);
-  await page.getByLabel('GitHub personal access token').fill('test-only-token');
-  await page.getByRole('button', { name: 'Unlock my practice' }).click();
-  await expect(page.getByRole('alert')).toContainText('another account');
-  login = 'akritkbehera';
-  await page.getByLabel('GitHub personal access token').fill('test-only-token');
-  await page.getByRole('button', { name: 'Unlock my practice' }).click();
+  await expect(page.getByRole('button', { name: 'Continue with GitHub' })).toBeVisible();
+  await expect(page.locator('input[type=password]')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Continue on this device' }).click();
   await expect(page.getByTestId('reveal-answer-button')).toBeVisible();
-  await page.getByRole('button', { name: 'Lock', exact: true }).click();
-  await expect(page.getByLabel('GitHub personal access token')).toBeVisible();
 });
 
 test('Easy persists rating 4 and undo removes its attempt and review', async ({ page }) => {

@@ -39,6 +39,7 @@ interface DeckCard {
 
 interface HistoryEntry {
   attemptId: number | null;
+  eventId: string;
   prevReview: ReviewState | null;
   cardId: string;
   grade: GradeResult;
@@ -104,12 +105,12 @@ export function SwipeDeck() {
       try {
         const gradeResult = gradeAnswerList(grade === 'again' ? '(not remembered)' : current.exercise.expected, current.exercise.expected, current.exercise.accepted, current.exercise.explanation);
         const prevReview = (await db.reviews.get(current.exercise.id)) ?? null;
-        const { attemptId } = await recordAttempt({
+        const { attemptId, eventId } = await recordAttempt({
           exercise: current.exercise, response: `(self-assessed: ${grade})`, grade: gradeResult,
           rating: ({ again: 1, hard: 2, good: 3, easy: 4 } as const)[grade],
           sessionId: sessionId.current, durationMs: Date.now() - presentedAt.current,
         });
-        historyRef.current.push({ attemptId, prevReview, cardId: current.exercise.id, grade: gradeResult,
+        historyRef.current.push({ attemptId, eventId, prevReview, cardId: current.exercise.id, grade: gradeResult,
           section: current.exercise.reviewKind === 'vocab' ? 'nouns' : current.exercise.reviewKind === 'verb' ? 'verbs' : 'sentences' });
         if (pos + 1 >= deck.length) {
           const entries = historyRef.current;
@@ -140,7 +141,7 @@ export function SwipeDeck() {
     if (!last || last.attemptId === null) { toast('Nothing to undo'); return; }
     busy.current = true;
     try {
-      await undoAttempt(last.attemptId, last.cardId, last.prevReview, sessionId.current);
+      await undoAttempt(last.attemptId, last.cardId, last.prevReview, sessionId.current, last.eventId);
       historyRef.current.pop();
       setPos(p => Math.max(0, p - 1)); setFinished(false);
       toast('Last grading undone');

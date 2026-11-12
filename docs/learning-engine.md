@@ -3,7 +3,8 @@
 French Daily uses a deterministic TypeScript implementation of the published
 FSRS-4.5 day-based memory formulas, with the 17 default weights. It runs in the
 browser; review state and history are saved to IndexedDB. There is no learning
-backend or cloud sync. This is a limited day-based scheduler, not full modern
+backend. Optional GitHub JSON sync merges review history across devices; its
+small authentication broker does not run the learning algorithm. This is a limited day-based scheduler, not full modern
 Anki parity.
 
 Each recall task has an independent ID: English→French, French→English,
@@ -37,7 +38,7 @@ dates are in the future. Due-only sessions can end below their nominal size.
 Failed typed exercises are retried at most twice during the session. A failed
 swipe card is scheduled for the next local day. There are no minute-based
 learning/relearning steps, same-day stability updates, parameter optimization,
-fuzz, Anki synchronization or cross-device synchronization.
+fuzz, Anki synchronization. Cross-device progress uses the optional GitHub sync connection.
 
 Every review atomically saves its attempt and memory state. Undo restores both.
 Repeated taps are ignored while a save is in flight. Completed swipe drills and

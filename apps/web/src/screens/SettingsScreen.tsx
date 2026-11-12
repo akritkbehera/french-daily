@@ -173,8 +173,7 @@ export function SettingsScreen() {
       <Card className="mt-3 p-4">
         <div className="text-[13px] font-semibold text-muted uppercase tracking-[0.08em] mb-2">Your data</div>
         <p className="text-[13px] text-muted">
-          Everything stays in your browser (IndexedDB). GitHub verifies access; learning history never leaves this device. No analytics. Export a backup to move
-          your progress between devices.
+          Reviews save in this browser first. When GitHub sync is connected, progress is uploaded as public JSON after completed sessions or when you press Sync. No analytics. You can also export a backup.
         </p>
         <div className="mt-3 flex flex-col gap-2">
           <Button variant="secondary" onClick={onExport}>

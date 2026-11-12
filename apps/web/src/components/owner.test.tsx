@@ -1,33 +1,25 @@
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
-import { OwnerGate, verifyOwner, hasOwnerSession } from './OwnerGate';
+import { afterEach, beforeEach, expect, it } from 'vitest';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { OwnerGate } from './OwnerGate';
+import { getGitHubSession } from '../sync/auth';
 
-beforeEach(() => sessionStorage.clear());
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
-it('does not mount learning content before owner verification', () => {
-  render(<OwnerGate><p>Private practice</p></OwnerGate>);
-  expect(screen.queryByText('Private practice')).not.toBeInTheDocument();
+beforeEach(() => { sessionStorage.clear(); localStorage.clear(); });
+afterEach(cleanup);
+it('offers GitHub sign-in without any token entry', () => {
+  render(<OwnerGate><p>Practice</p></OwnerGate>);
+  expect(screen.getByRole('button', { name: 'Continue with GitHub' })).toBeInTheDocument();
+  expect(screen.queryByRole('textbox')).toBeNull();
+  expect(screen.queryByText('Practice')).toBeNull();
 });
-it('rejects another GitHub account even with a valid token', async () => {
-  const fetcher = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ login: 'someone-else' }) });
-  await expect(verifyOwner('test-token', fetcher)).rejects.toThrow('another account');
-  expect(hasOwnerSession()).toBe(false);
+it('keeps local practice available while GitHub is disconnected', () => {
+  render(<OwnerGate><p>Practice</p></OwnerGate>);
+  fireEvent.click(screen.getByRole('button', { name: 'Continue on this device' }));
+  expect(screen.getByText('Practice')).toBeInTheDocument();
+  expect(getGitHubSession()).toBeNull();
 });
-it('unlocks the owner and does not persist the token', async () => {
-  const fetcher = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ login: 'akritkbehera' }) });
-  vi.stubGlobal('fetch', fetcher);
-  render(<OwnerGate><p>Private practice</p></OwnerGate>);
-  fireEvent.change(screen.getByLabelText('GitHub personal access token'), { target: { value: 'test-token' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Unlock my practice' }));
-  await waitFor(() => expect(screen.getByText('Private practice')).toBeInTheDocument());
-  expect(sessionStorage.getItem('french-daily-owner-session')).not.toContain('test-token');
-  expect(localStorage.length).toBe(0);
-  fireEvent.click(screen.getByRole('button', { name: 'Lock' }));
-  expect(screen.queryByText('Private practice')).not.toBeInTheDocument();
-});
-it('rejects expired or malformed sessions', () => {
-  sessionStorage.setItem('french-daily-owner-session', JSON.stringify({ login: 'akritkbehera', verifiedAt: Date.now() - 8 * 86400000 }));
-  expect(hasOwnerSession()).toBe(false);
-  sessionStorage.setItem('french-daily-owner-session', '{');
-  expect(hasOwnerSession()).toBe(false);
+it('rejects expired or wrong-owner stored sessions', () => {
+  localStorage.setItem('french-daily-github-auth', JSON.stringify({ token: 'opaque-session', login: 'someone-else', expiresAt: Date.now() + 60000 }));
+  expect(getGitHubSession()).toBeNull();
+  localStorage.setItem('french-daily-github-auth', JSON.stringify({ token: 'opaque-session', login: 'akritkbehera', expiresAt: Date.now() - 1 }));
+  expect(getGitHubSession()).toBeNull();
 });

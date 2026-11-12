@@ -12,3 +12,9 @@ blob-report/
 .DS_Store
 *.tsbuildinfo
 .vite/
+
+# Local GitHub/Cloudflare setup state (never credentials)
+packages/auth-broker/.setup-state.json
+packages/auth-broker/wrangler.local.json
+**/.wrangler/
+**/.dev.vars*

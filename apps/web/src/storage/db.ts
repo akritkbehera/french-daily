@@ -31,6 +31,7 @@ export class FrenchDailyDb extends Dexie {
   milestones!: Table<MilestoneRecord, number>;
   challenges!: Table<ChallengeRow, string>;
   settings!: Table<AppSettings, string>;
+  tombstones!: Table<{ id: string }, string>;
   snapshots!: Table<{ id?: number; createdAt: number; data: unknown }, number>;
 
   constructor(name = 'french-daily') {
@@ -43,6 +44,7 @@ export class FrenchDailyDb extends Dexie {
       challenges: 'id, date',
       settings: 'id',
     });
+    this.version(3).stores({ tombstones: 'id' });
     this.version(2).stores({ snapshots: '++id, createdAt' }).upgrade(async tx => {
       const reviews = await tx.table('reviews').toArray();
       const attempts = await tx.table('attempts').toArray();

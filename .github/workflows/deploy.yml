@@ -18,6 +18,9 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      VITE_REPOSITORY_OWNER: ${{ github.repository_owner }}
+      VITE_GITHUB_AUTH_URL: ${{ vars.FRENCH_DAILY_AUTH_URL }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
