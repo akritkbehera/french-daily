@@ -3,8 +3,8 @@
  * kept strictly separate. Definitions are shown inline so "learned" and
  * "mastered" are unambiguous.
  */
-import { useEffect, useMemo, useState } from 'react';
-import type { AttemptRecord, ChallengeProgress, ReviewState, SessionCompletionRecord, MilestoneRecord } from '@french-daily/learning-core';
+import { useMemo } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import {
   accuracyOverTime,
   computeEngagementMetrics,
@@ -21,28 +21,10 @@ import { useApp } from '../hooks/useApp';
 
 export function ProgressScreen() {
   const { settings } = useApp();
-  const [attempts, setAttempts] = useState<AttemptRecord[]>([]);
-  const [sessions, setSessions] = useState<SessionCompletionRecord[]>([]);
-  const [reviews, setReviews] = useState<Map<string, ReviewState>>(new Map());
-  const [challenges, setChallenges] = useState<ChallengeProgress[]>([]);
-  const [milestones, setMilestones] = useState<MilestoneRecord[]>([]);
-
-  useEffect(() => {
-    (async () => {
-      const [a, s, r, c, m] = await Promise.all([
-        listAttempts(),
-        listSessions(),
-        getReviewStates(),
-        listAllChallenges(),
-        listMilestones(),
-      ]);
-      setAttempts(a);
-      setSessions(s);
-      setReviews(r);
-      setChallenges(c);
-      setMilestones(m);
-    })();
-  }, []);
+  const [attempts, sessions, reviews, challenges, milestones] = useLiveQuery(
+    () => Promise.all([listAttempts(), listSessions(), getReviewStates(), listAllChallenges(), listMilestones()]),
+    [], [[], [], new Map(), [], []],
+  );
 
   const today = todayLocal();
   const learning = useMemo(() => computeLearningMetrics(attempts, reviews, today), [attempts, reviews, today]);
@@ -63,7 +45,7 @@ export function ProgressScreen() {
         Learning quality
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <Stat label="Accuracy" value={`${learning.accuracy}%`} sub={`${learning.totalAttempts} answers`} tone={learning.accuracy >= 80 ? 'good' : 'accent'} />
+        <Stat label="Accuracy" value={`${learning.accuracy}%`} sub={`${learning.totalAttempts} answer${learning.totalAttempts === 1 ? '' : 's'}`} tone={learning.accuracy >= 80 ? 'good' : 'accent'} />
         <Stat
           label="Est. retention"
           value={learning.estimatedRetention !== null ? `${Math.round(learning.estimatedRetention * 100)}%` : '—'}

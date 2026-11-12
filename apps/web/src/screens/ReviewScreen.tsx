@@ -2,7 +2,8 @@
  * Review — the FSRS-driven review queue: what's due now, what's coming,
  * and one-tap review sessions sized to the queue.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import type { ReviewState } from '@french-daily/learning-core';
 import { difficultyScore, estimatedRetention, todayLocal, shortDateLabel, reviewPriority } from '@french-daily/learning-core';
 import { labelForContentId } from '@french-daily/french-data';
@@ -12,11 +13,7 @@ import { useApp } from '../hooks/useApp';
 
 export function ReviewScreen() {
   const { startReviewSession } = useApp();
-  const [reviews, setReviews] = useState<Map<string, ReviewState>>(new Map());
-
-  useEffect(() => {
-    getReviewStates().then(setReviews);
-  }, []);
+  const reviews = useLiveQuery(getReviewStates, [], new Map<string, ReviewState>());
 
   const today = todayLocal();
 
