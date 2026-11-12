@@ -241,7 +241,7 @@ export async function checkMilestones(input: MilestoneCheckInput): Promise<Miles
 }
 
 export async function listMilestones(): Promise<MilestoneRecord[]> {
-  return db.milestones.orderBy('achievedAt').reverse().toArray();
+  return (await db.milestones.toArray()).sort((a, b) => b.achievedAt - a.achievedAt);
 }
 
 /* ---------------- grading helper used by the swipe deck ---------------- */
