@@ -48,7 +48,7 @@ describe('backup export/import', () => {
     expect(result.restored?.reviews).toBe(1);
     expect(result.restored?.attempts).toBe(1);
 
-    const restored = await db.reviews.get(ex.itemId);
+    const restored = await db.reviews.get(ex.id);
     expect(restored).toBeDefined();
     expect(restored!.reviewCount).toBe(1);
     const settings = await db.settings.get('settings');

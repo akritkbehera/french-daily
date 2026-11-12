@@ -99,7 +99,7 @@ server.registerTool(
         indefiniteArticle: v.articles.indefiniteSingular,
         elision: v.elision,
         plural: v.plural,
-        definitePlural: `${v.articles.definitePlural}${v.plural}`,
+        definitePlural: `${v.articles.definitePlural} ${v.plural}`,
         level: v.level,
         topic: v.topic,
         exampleFr: v.exampleFr,
@@ -239,11 +239,12 @@ server.registerTool(
       }
     }
     if (!exercise) return errorText('no exercise matches those filters');
-    const { expected: _expected, accepted: _accepted, ...publicExercise } = exercise;
+    const { expected: _expected, accepted: _accepted, explanation: _explanation, ...publicExercise } = exercise;
+    const quiz = Object.fromEntries(Object.entries(publicExercise).filter(([key]) => !['correctIndex', 'correctOrder', 'hint'].includes(key)));
     return text(
       includeAnswer === false
-        ? publicExercise
-        : { ...publicExercise, expected: exercise.expected, accepted: exercise.accepted },
+        ? quiz
+        : { ...exercise },
     );
   },
 );

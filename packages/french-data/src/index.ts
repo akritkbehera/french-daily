@@ -49,6 +49,7 @@ export const sentenceById: Map<string, SentencePair> = new Map(sentences.map((s)
 
 /** Human-readable label for any content id (dashboard lists). */
 export function labelForContentId(itemId: string): string {
+  itemId = itemId.split('::')[0];
   const v = vocabById.get(itemId);
   if (v) return `${v.french} (${v.english[0]})`;
   const verb = verbById.get(itemId);

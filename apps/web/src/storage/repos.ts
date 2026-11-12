@@ -9,6 +9,7 @@ import {
   initialReviewState,
   todayLocal,
   type AppSettings,
+  type FsrsRating,
   type AttemptRecord,
   type ChallengeProgress,
   type Exercise,
@@ -49,6 +50,7 @@ export interface RecordAttemptInput {
   grade: GradeResult;
   sessionId: string;
   durationMs: number | null;
+  rating?: FsrsRating;
 }
 
 export interface RecordAttemptResult {
@@ -65,7 +67,8 @@ export async function recordAttempt(input: RecordAttemptInput): Promise<RecordAt
   const { exercise, grade } = input;
 
   const attempt: AttemptRecord = {
-    itemId: exercise.itemId,
+    itemId: exercise.id,
+    contentId: exercise.itemId,
     kind: exercise.reviewKind,
     exerciseKind: exercise.kind,
     date: today,
@@ -75,16 +78,19 @@ export async function recordAttempt(input: RecordAttemptInput): Promise<RecordAt
     correct: grade.isCorrect,
     sessionId: input.sessionId,
     durationMs: input.durationMs,
-    rating: grade.isCorrect ? 3 : grade.outcome === 'typo' || grade.outcome === 'accent' ? 2 : 1,
+    rating: input.rating ?? (grade.isCorrect ? 3 : grade.outcome === 'typo' || grade.outcome === 'accent' ? 2 : 1),
   };
-  const attemptId = (await db.attempts.add(attempt)) as number;
-
-  const existing = (await db.reviews.get(exercise.itemId)) ?? initialReviewState(exercise.itemId, exercise.reviewKind, today);
   const settings = await getSettings();
-  const updated = applyReview(existing, grade, today, settings.desiredRetention);
-  await db.reviews.put(updated);
-  await refreshTodaysChallenges();
-  return { attemptId, reviewState: updated };
+  const result = await db.transaction('rw', [db.attempts, db.reviews], async () => {
+    const existing = (await db.reviews.get(exercise.id)) ?? initialReviewState(exercise.id, exercise.reviewKind, today);
+    const updated = { ...applyReview(existing, grade, today, settings.desiredRetention, input.rating), contentId: exercise.itemId, exercise };
+    const attemptId = (await db.attempts.add(attempt)) as number;
+    await db.reviews.put(updated);
+    return { attemptId, reviewState: updated };
+  });
+  // Derived projections must never turn an already committed review into a failed save.
+  await refreshTodaysChallenges().catch(() => undefined);
+  return result;
 }
 
 /* ---------------- sessions & streaks ---------------- */
@@ -94,10 +100,11 @@ export async function recordSessionCompletion(
   summary: SessionSummary,
   mode: SessionCompletionRecord['mode'],
   durationMs: number | null,
+  sessionId?: string,
 ): Promise<{ streak: number; longestStreak: number }> {
   const today = todayLocal();
   const record: SessionCompletionRecord = {
-    sessionId: `${today}-${Date.now().toString(36)}`,
+    sessionId: sessionId ?? `${today}-${Date.now().toString(36)}`,
     mode,
     date: today,
     timestamp: Date.now(),
@@ -107,7 +114,9 @@ export async function recordSessionCompletion(
     accuracy: summary.accuracy,
     durationMs,
   };
-  await db.sessions.add(record);
+  await db.transaction('rw', db.sessions, async () => {
+    if (!(await db.sessions.where('sessionId').equals(record.sessionId).first())) await db.sessions.add(record);
+  });
 
   const settings = await getSettings();
   const completions = await db.sessions.orderBy('date').uniqueKeys();
@@ -166,7 +175,7 @@ export async function refreshTodaysChallenges(): Promise<ChallengeProgress[]> {
   const rows = await db.challenges.where('date').equals(today).toArray();
   if (rows.length === 0) return getTodaysChallenges();
   const ctx = await challengeContext(today);
-  const refreshed = refreshChallenges(rows, ctx).map((c) => ({ ...c, id: `${c.date}::${c.id}` }));
+  const refreshed = refreshChallenges(rows, ctx).map((c) => ({ ...c, id: `${c.date}::${c.def.id}` }));
   await db.challenges.bulkPut(refreshed as ChallengeRow[]);
   return refreshed;
 }
@@ -234,4 +243,17 @@ export async function listMilestones(): Promise<MilestoneRecord[]> {
 /** Grade a self-reported swipe answer against the exercise's expected answer. */
 export function gradeSwipe(exercise: Exercise, known: boolean): GradeResult {
   return gradeAnswerList(known ? exercise.expected : '(skipped)', exercise.expected, exercise.accepted, exercise.explanation);
+}
+
+/** Restore the exact review and its log in one transaction. */
+export async function undoAttempt(attemptId: number, cardId: string, previous: ReviewState | null, sessionId: string): Promise<void> {
+  await db.transaction('rw', [db.attempts, db.reviews, db.sessions], async () => {
+    await db.attempts.delete(attemptId);
+    if (previous) await db.reviews.put(previous); else await db.reviews.delete(cardId);
+    await db.sessions.where('sessionId').equals(sessionId).delete();
+  });
+  const settings = await getSettings();
+  const dates = await db.sessions.orderBy('date').uniqueKeys();
+  await saveSettings({ streak: settings.streaksEnabled ? computeStreak(dates as string[]) : 0 });
+  await refreshTodaysChallenges().catch(() => undefined);
 }

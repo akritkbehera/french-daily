@@ -34,7 +34,7 @@ export function ReviewScreen() {
 
   return (
     <Screen>
-      <SectionTitle>Review</SectionTitle>
+      <SectionTitle level={1}>Review</SectionTitle>
       <p className="text-[14px] text-muted -mt-1 mb-4">
         Scheduling is handled by FSRS: items return when your recall probability is projected to hit the target — not on a fixed loop.
       </p>
@@ -50,7 +50,7 @@ export function ReviewScreen() {
         <p className="mt-1 text-[13.5px] text-muted">
           {due.length === 0
             ? 'Nothing is due right now — review when items come due, or run a practice session instead.'
-            : `Clear ${due.length} due item${due.length === 1 ? '' : 's'}, hardest first.`}
+            : `Review up to 9 of ${due.length} due item${due.length === 1 ? '' : 's'}, hardest first.`}
         </p>
         <Button className="mt-3 w-full" disabled={due.length === 0} onClick={() => startReviewSession('short')}>
           Start review session →

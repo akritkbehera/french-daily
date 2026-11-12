@@ -197,10 +197,11 @@ export function ProgressBar({ value, max, tone = 'accent' }: { value: number; ma
   );
 }
 
-export function SectionTitle({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
+export function SectionTitle({ children, action, level = 2 }: { children: React.ReactNode; action?: React.ReactNode; level?: 1 | 2 }) {
+  const Heading = level === 1 ? 'h1' : 'h2';
   return (
     <div className="flex items-end justify-between mb-3">
-      <h2 className="text-[17px] font-bold text-ink tracking-[-0.01em]">{children}</h2>
+      <Heading className="text-[17px] font-bold text-ink tracking-[-0.01em]">{children}</Heading>
       {action}
     </div>
   );

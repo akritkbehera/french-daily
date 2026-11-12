@@ -56,7 +56,7 @@ export function ProgressScreen() {
 
   return (
     <Screen>
-      <SectionTitle>Progress</SectionTitle>
+      <SectionTitle level={1}>Progress</SectionTitle>
 
       {/* LEARNING metrics */}
       <div className="rounded-2xl border border-accent/30 bg-accentsoft/40 p-1.5 pl-3 mb-2 text-[11px] font-bold text-accent uppercase tracking-[0.1em]">
@@ -69,8 +69,8 @@ export function ProgressScreen() {
           value={learning.estimatedRetention !== null ? `${Math.round(learning.estimatedRetention * 100)}%` : '—'}
           sub="FSRS retrievability now"
         />
-        <Stat label="Learned words" value={learning.learnedItems} sub="≥2 correct on 2 days" tone="good" />
-        <Stat label="Mastered" value={learning.masteredItems} sub="≥4 correct, 3 days, ivl ≥7d" tone="accent" />
+        <Stat label="Learned cards" value={learning.learnedItems} sub="≥2 correct on 2 days" tone="good" />
+        <Stat label="Mastered cards" value={learning.masteredItems} sub="≥4 correct, 3 days, ivl ≥7d" tone="accent" />
         <Stat label="Recovered" value={`${learning.recoveredCards}`} sub={`${learning.recoveryRate}% of failed items`} />
         <Stat
           label="Avg time"

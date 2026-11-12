@@ -28,7 +28,7 @@ export function NounsScreen() {
 
   return (
     <Screen>
-      <SectionTitle
+      <SectionTitle level={1}
         action={
           <Button
             variant="secondary"
@@ -123,13 +123,13 @@ function VocabRow({
           <div className="rounded-xl bg-surface2 p-3 text-[14px] space-y-1">
             <div>
               <span className="text-muted">definite: </span>
-              <strong>{withDefiniteArticle(item.french, { gender: item.gender, elision: item.elision })}</strong>
+              <strong>{item.number === 'plural' ? `les ${item.french}` : withDefiniteArticle(item.french, { gender: item.gender, elision: item.elision })}</strong>
               <span className="text-muted"> · plural: </span>
-              <strong>{item.articles.definitePlural}{item.plural}</strong>
+              <strong>{item.articles.definitePlural} {item.plural}</strong>
             </div>
             <div>
               <span className="text-muted">indefinite: </span>
-              <strong>{item.articles.indefiniteSingular} {item.french}</strong>
+              <strong>{item.number === 'plural' ? 'des' : item.articles.indefiniteSingular} {item.french}</strong>
             </div>
           </div>
           <div className="mt-2.5 text-[14px]">

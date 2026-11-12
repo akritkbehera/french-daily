@@ -121,13 +121,13 @@ export function generateChallenges(ctx: ChallengeContext, rng: Rng = createRng(h
 
   const due = dueCount(ctx);
   if (due > 0) {
-    eligible.push({ ...FINISH_REVIEWS, target: Math.min(due, 30), description: `Clear the ${Math.min(due, 30)} review${due === 1 ? '' : 's'} scheduled for today.` });
+    eligible.push({ ...FINISH_REVIEWS, target: due, itemIds: [...ctx.reviews.values()].filter(r => r.nextDue <= ctx.today).map(r => r.itemId), description: `Clear the ${due} review${due === 1 ? '' : 's'} scheduled for today.` });
   }
 
   const missed = recentlyMissedItems(ctx.attemptsAll, ctx.today);
   if (missed.size > 0) {
     const target = Math.min(5, missed.size);
-    eligible.push({ ...FIX_MISSED, target, description: `Get ${target} previously missed item${target === 1 ? '' : 's'} right.` });
+    eligible.push({ ...FIX_MISSED, itemIds: [...missed], target, description: `Get ${target} previously missed item${target === 1 ? '' : 's'} right.` });
   }
 
   const hasIrregular = [...ctx.irregularVerbIds].some((id) => (ctx.reviews.get(id)?.nextDue ?? '0') <= ctx.today || !ctx.reviews.has(id));
@@ -164,21 +164,22 @@ export function challengeProgress(def: ChallengeDef, ctx: ChallengeContext): num
     case 'recall-nouns':
       return today.filter((a) => a.kind === 'vocab' && a.correct).length;
     case 'irregular-conjugations':
-      return today.filter((a) => a.kind === 'verb' && a.correct && ctx.irregularVerbIds.has(a.itemId)).length;
+      return today.filter((a) => a.kind === 'verb' && a.correct && ctx.irregularVerbIds.has(a.contentId ?? a.itemId.split('::')[0])).length;
     case 'fix-missed': {
-      const missed = recentlyMissedItems(ctx.attemptsAll, ctx.today);
-      return today.filter((a) => a.correct && missed.has(a.itemId)).length;
+      const cohort = new Set(def.itemIds ?? ctx.attemptsAll.filter(a => !a.correct).map(a => a.itemId));
+      const corrected = new Set<string>();
+      for (const a of today) {
+        if (a.correct && cohort.has(a.itemId) && ctx.attemptsAll.some(old => old.itemId === a.itemId && !old.correct && old.timestamp < a.timestamp)) corrected.add(a.itemId);
+      }
+      return corrected.size;
     }
     case 'build-sentences':
       return today.filter((a) => a.kind === 'sentence' && a.correct).length;
-    case 'finish-reviews': {
-      // Reviews cleared today: due items (as of start of day) now scheduled ahead.
-      let cleared = 0;
-      for (const r of ctx.reviews.values()) {
-        if (r.lastReviewed === ctx.today && r.nextDue > ctx.today) cleared += 1;
-      }
-      return cleared;
-    }
+    case 'finish-reviews':
+      return (def.itemIds ?? []).filter(id => {
+        const r = ctx.reviews.get(id);
+        return r && r.lastReviewed === ctx.today && r.nextDue > ctx.today;
+      }).length;
     case 'accuracy-run': {
       let run = 0;
       let best = 0;

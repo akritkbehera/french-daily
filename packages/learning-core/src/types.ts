@@ -44,6 +44,8 @@ export interface ArticleForms {
 
 /** A curated vocabulary entry (nouns, and a few fixed phrases used as nouns). */
 export interface VocabItem {
+  number?: 'singular' | 'plural';
+  countable?: boolean;
   id: string;
   /** French lemma, e.g. "maison". */
   french: string;
@@ -66,6 +68,8 @@ export interface VocabItem {
 
 /** Compact authoring shape for vocabulary entries (expanded by `buildVocabulary`). */
 export interface RawVocabEntry {
+  number?: 'singular' | 'plural';
+  countable?: boolean;
   french: string;
   english: string[];
   gender: Gender;
@@ -158,6 +162,8 @@ import type { FsrsRating } from './fsrs';
  *   - difficulty: 1 (easy) … 10 (hard).
  */
 export interface ReviewState {
+  contentId?: string;
+  exercise?: Exercise;
   /** Content id, e.g. "noun:maison" or "verb:prendre". */
   itemId: string;
   kind: ReviewKind;
@@ -361,6 +367,7 @@ export interface WeakArea {
 /* ------------------------------------------------------------------ */
 
 export interface AttemptRecord {
+  contentId?: string;
   id?: number;
   itemId: string;
   kind: ReviewKind;
@@ -405,6 +412,7 @@ export type ChallengeKind =
   | 'accuracy-run';
 
 export interface ChallengeDef {
+  itemIds?: string[];
   id: string;
   kind: ChallengeKind;
   title: string;

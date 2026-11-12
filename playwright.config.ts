@@ -16,6 +16,7 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:4173/french-daily/',
     trace: 'retain-on-failure',
+    launchOptions: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH } : {},
     screenshot: 'only-on-failure',
   },
   projects: [

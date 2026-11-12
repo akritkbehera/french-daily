@@ -3,6 +3,8 @@
  * keyboard shortcuts and the update prompt.
  */
 import { useEffect } from 'react';
+import { OwnerGate } from './components/OwnerGate';
+import { UpdateNotice } from './components/UpdateNotice';
 import { AppProvider, useApp } from './hooks/useApp';
 import { Nav } from './components/Nav';
 import { SessionRunner } from './components/SessionRunner';
@@ -22,6 +24,7 @@ function Shell() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
+      if (sessionConfig) return;
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const views = ['today', 'nouns', 'verbs', 'practice', 'review', 'progress', 'settings'] as const;
@@ -34,13 +37,13 @@ function Shell() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [navigate]);
+  }, [navigate, sessionConfig]);
 
   return (
     <div className="min-h-screen">
-      <Nav view={view} onNavigate={navigate} />
+      <div inert={!!sessionConfig}><Nav view={view} onNavigate={navigate} /></div>
 
-      <main className="md:pl-60">
+      <main inert={!!sessionConfig} className="md:pl-60">
         {view === 'today' && <TodayScreen />}
         {view === 'nouns' && <NounsScreen />}
         {view === 'verbs' && <VerbsScreen />}
@@ -86,8 +89,8 @@ function Shell() {
 
 export function App() {
   return (
-    <AppProvider>
-      <Shell />
-    </AppProvider>
+    <OwnerGate><AppProvider>
+      <Shell /><UpdateNotice />
+    </AppProvider></OwnerGate>
   );
 }

@@ -13,10 +13,13 @@ const VOWEL = 'aàâäeéèêëiîïoôöuùûüœæh';
 /** Display a subject + verb form with correct elision, e.g. "j'aime", "nous allons". */
 export function conjugated(pronoun: PronounKey, form: string, reflexive = false): string {
   const subj = PRONOUN_LABELS[pronoun].split('/')[0];
-  const se = reflexive ? reflexivePronoun(pronoun) + ' ' : '';
+  if (reflexive) {
+    const ref = reflexivePronoun(pronoun);
+    const elide = VOWEL.includes(form.charAt(0));
+    return `${subj} ${elide && ['me','te','se'].includes(ref) ? ref.slice(0, -1) + "'" : ref + ' '}${form}`;
+  }
   const needsElision = subj === 'je' && VOWEL.includes(form.charAt(0));
-  const subject = needsElision ? "j'" : subj === 'je' ? 'je ' : `${subj} `;
-  return `${subject}${se}${form}`.replace(/\s+/g, ' ').trim();
+  return `${needsElision ? "j'" : subj + ' '}${form}`;
 }
 
 export function reflexivePronoun(pronoun: PronounKey): string {
@@ -65,7 +68,7 @@ export function regularForm(infinitive: string, group: VerbGroup, pronoun: Prono
 
 /** Explanation of the conjugation rule for a verb/pronoun pair. */
 export function conjugationExplanation(infinitive: string, group: VerbGroup, pronoun: PronounKey, correctForm: string): string {
-  const subject = conjugated(pronoun, correctForm);
+  const subject = conjugated(pronoun, correctForm, /^se |^s['’]/.test(infinitive));
   const regular = regularForm(infinitive, group, pronoun);
   const pattern = group === 'er' ? '-er' : group === 'ir' ? '-ir' : group === 're' ? '-re' : 'irregular';
   if (regular && regular === correctForm) {
