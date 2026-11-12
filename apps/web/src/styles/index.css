@@ -59,6 +59,9 @@
 html {
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
+  /* Swipe animations translate cards past the viewport; never let that
+     create a horizontal scrollbar or shift hit-targets. */
+  overflow-x: clip;
 }
 
 body {
@@ -69,6 +72,7 @@ body {
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   overscroll-behavior-y: none;
+  overflow-x: clip;
 }
 
 input,

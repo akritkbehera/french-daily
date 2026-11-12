@@ -262,7 +262,7 @@ export function SwipeDeck() {
       </div>
 
       {/* Card stack */}
-      <div className="relative mt-4 h-[380px] select-none card-stack" aria-live="polite">
+      <div className="relative mt-4 h-[380px] select-none card-stack overflow-hidden" aria-live="polite">
         {finished ? (
           <Card className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-8 text-center">
             <div className="text-[40px]">✨</div>
@@ -285,6 +285,7 @@ export function SwipeDeck() {
                 dragging={dragging}
                 flying={flying}
                 reduced={reduced}
+                testId="swipe-card"
                 onPointerDown={onPointerDown}
                 onPointerMove={onPointerMove}
                 onPointerUp={onPointerUp}
@@ -324,7 +325,7 @@ export function SwipeDeck() {
       )}
 
       {!finished && !current?.revealed && current && (
-        <Button className="mt-4 w-full" onClick={reveal}>
+        <Button className="mt-4 w-full" data-testid="reveal-answer-button" onClick={reveal}>
           Reveal answer
         </Button>
       )}
@@ -351,6 +352,7 @@ function SwipeCardView({
   dragging,
   flying,
   reduced,
+  testId,
   onPointerDown,
   onPointerMove,
   onPointerUp,
@@ -363,6 +365,7 @@ function SwipeCardView({
   dragging: boolean;
   flying?: 'left' | 'right' | null;
   reduced?: boolean;
+  testId?: string;
   onPointerDown?: (e: React.PointerEvent) => void;
   onPointerMove?: (e: React.PointerEvent) => void;
   onPointerUp?: (e: React.PointerEvent) => void;
@@ -380,6 +383,7 @@ function SwipeCardView({
     <div
       className={`swipe-card absolute inset-0 ${dragging ? 'dragging' : ''}`}
       style={style}
+      data-testid={testId}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -403,6 +407,7 @@ function SwipeCardView({
             onReveal && (
               <button
                 onClick={onReveal}
+                data-testid="reveal-button"
                 className="rounded-2xl border-2 border-dashed border-edge px-6 py-3 text-[15px] font-semibold text-muted hover:text-ink hover:border-accent transition"
               >
                 Think of the answer, then tap to reveal

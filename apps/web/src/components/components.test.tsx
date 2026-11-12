@@ -3,6 +3,7 @@
  * accessibility affordances.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import '@testing-library/jest-dom/vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { buildSession, defaultSessionConfig, gradeAnswerList, type Exercise, type SessionState } from '@french-daily/learning-core';
 import { sources } from '@french-daily/french-data';
@@ -11,7 +12,7 @@ import { Nav } from './Nav';
 
 function makeExercise(overrides: Partial<Exercise> = {}): Exercise {
   const session: SessionState = buildSession(defaultSessionConfig('short'), sources, new Map(), '2026-11-12', 'ui-seed');
-  return { ...session.items[0].exercise, ...overrides };
+  return { ...session.items[0].exercise, ...overrides } as Exercise;
 }
 
 beforeEach(cleanup);

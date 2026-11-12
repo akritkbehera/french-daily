@@ -129,6 +129,7 @@ export function ExerciseCard({
             spellCheck={false}
             enterKeyHint="done"
             aria-label="Your answer"
+            data-testid="answer-input"
             className={`w-full rounded-2xl border-2 bg-surface px-4 py-4 text-[19px] text-ink placeholder:text-muted/60
               transition-colors disabled:opacity-80 ${revealed ? 'border-edge' : 'border-edge focus:border-accent'}`}
           />
@@ -147,6 +148,7 @@ export function ExerciseCard({
             autoCorrect="off"
             spellCheck={false}
             aria-label="Your sentence"
+            data-testid="sentence-input"
             className={`w-full rounded-2xl border-2 bg-surface px-4 py-3.5 text-[18px] leading-relaxed text-ink placeholder:text-muted/60
               transition-colors resize-none disabled:opacity-80 ${revealed ? 'border-edge' : 'border-edge focus:border-accent'}`}
           />
@@ -161,6 +163,7 @@ export function ExerciseCard({
                 <button
                   key={`${opt}-${i}`}
                   disabled={revealed}
+                  data-testid="exercise-option"
                   onClick={() => submitSelection(i)}
                   className={`rounded-2xl border-2 px-4 py-3.5 text-[17px] font-semibold transition
                     ${revealed
@@ -204,6 +207,7 @@ export function ExerciseCard({
                   <button
                     key={`bank-${i}`}
                     disabled={revealed}
+                    data-testid="word-tile"
                     onClick={() => setTiles((t) => [...t, i])}
                     className="rounded-xl border border-edge bg-surface px-3 py-2 text-[15px] font-semibold text-ink active:scale-95 transition"
                   >
@@ -228,11 +232,11 @@ export function ExerciseCard({
       {!revealed && (
         <div className="mt-5 flex items-center gap-3">
           {exercise.kind === 'word-order' ? (
-            <Button onClick={submitWordOrder} disabled={tiles.length !== tokens.length} className="flex-1">
+            <Button onClick={submitWordOrder} disabled={tiles.length !== tokens.length} data-testid="check-button" className="flex-1">
               Check answer
             </Button>
           ) : (exercise.kind === 'multiple-choice' || exercise.kind === 'gender-select') ? null : (
-            <Button onClick={submitText} disabled={text.trim().length === 0} className="flex-1">
+            <Button onClick={submitText} disabled={text.trim().length === 0} data-testid="check-button" className="flex-1">
               Check answer
             </Button>
           )}
@@ -285,7 +289,7 @@ export function ExerciseCard({
               </Button>
             )}
           </div>
-          <Button onClick={onContinue} className="mt-4 w-full" autoFocus>
+          <Button onClick={onContinue} className="mt-4 w-full" data-testid="continue-button" autoFocus>
             Continue →
           </Button>
         </div>

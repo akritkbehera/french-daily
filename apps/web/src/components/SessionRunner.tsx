@@ -35,6 +35,8 @@ export function SessionRunner({ config, onClose, onStartAnother }: Props) {
   const { settings, toast } = useApp();
   const [session, setSession] = useState<SessionState | null>(null);
   const [grade, setGrade] = useState<GradeResult | null>(null);
+  /** The item currently shown — stays pinned while its feedback is visible. */
+  const [gradedItemId, setGradedItemId] = useState<string | null>(null);
   const [summary, setSummary] = useState<SessionSummary | null>(null);
   const [streak, setStreak] = useState(0);
   const [elapsed, setElapsed] = useState(0);
@@ -61,7 +63,10 @@ export function SessionRunner({ config, onClose, onStartAnother }: Props) {
   }, []);
 
   const items = session?.items ?? [];
-  const currentItem: SessionItem | undefined = useMemo(() => items.find((i) => !i.answered) ?? items[items.length - 1], [items]);
+  const currentItem: SessionItem | undefined = useMemo(() => {
+    if (gradedItemId) return items.find((i) => i.exercise.id === gradedItemId);
+    return items.find((i) => !i.answered) ?? items[items.length - 1];
+  }, [items, gradedItemId]);
   const answeredCount = items.filter((i) => i.answered).length;
 
   const handleAnswer = useCallback(
@@ -73,6 +78,7 @@ export function SessionRunner({ config, onClose, onStartAnother }: Props) {
 
       setSession(result.state);
       setGrade(result.grade);
+      setGradedItemId(currentItem.exercise.id);
       feedbackEffects(result.grade, {
         sound: settings?.soundEnabled ?? false,
         haptics: settings?.hapticsEnabled ?? false,
@@ -92,6 +98,7 @@ export function SessionRunner({ config, onClose, onStartAnother }: Props) {
   const handleContinue = useCallback(async () => {
     if (!session) return;
     setGrade(null);
+    setGradedItemId(null);
     presentedAt.current = Date.now();
 
     if (isSessionComplete(session)) {
@@ -158,6 +165,7 @@ export function SessionRunner({ config, onClose, onStartAnother }: Props) {
                 onClick={() => (answeredCount > 0 ? setAbandonConfirm(true) : onClose())}
                 className="rounded-full border border-edge bg-surface px-3.5 py-1.5 text-[13px] font-semibold text-muted"
                 aria-label="End session"
+                data-testid="end-session-button"
               >
                 ✕ End
               </button>
@@ -269,7 +277,7 @@ export function SessionRunner({ config, onClose, onStartAnother }: Props) {
                 <Button variant="secondary" className="flex-1" onClick={() => setAbandonConfirm(false)}>
                   Keep practicing
                 </Button>
-                <Button variant="danger" className="flex-1" onClick={onClose}>
+                <Button variant="danger" className="flex-1" data-testid="confirm-end-button" onClick={onClose}>
                   End session
                 </Button>
               </div>
