@@ -1,0 +1,21 @@
+{
+  "name": "@french-daily/mcp-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Model Context Protocol server exposing French Daily learning tools over stdio for desktop AI clients.",
+  "main": "./dist/index.js",
+  "bin": {
+    "french-daily-mcp": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@french-daily/french-data": "*",
+    "@french-daily/learning-core": "*",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.23.0"
+  }
+}
